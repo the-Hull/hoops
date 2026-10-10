@@ -1,5 +1,7 @@
 #include "Service.hpp"
 
+#include <cstdio>
+#include <cstring>
 #include <ctime>
 
 #include "SDK/Messages/MessageGuard.hpp"
@@ -162,26 +164,30 @@ void Service::handleMessage(SDK::MessageBase* msg)
             const bool made = static_cast<CustomMessage::Shot*>(msg)->made != 0;
             const uint16_t before = mEngine.session().count;
             const Event ev = mEngine.shot(made);
+            bool alerted = false;   // one haptic per shot: Alert replaces Make/Miss/Streak
             if (mEngine.session().count != before) {
-                if (made) {
-                    const uint8_t streak = mEngine.currentStreak();
-                    haptic(streak == 5                          ? HapticEvent::Streak5
-                           : (streak >= 10 && streak % 10 == 0) ? HapticEvent::Streak10
-                                                                : HapticEvent::Make);
-                } else {
-                    haptic(HapticEvent::Miss);
-                }
-                if (mSettings.backlightOnShot) backlightOn();
-                autosave();
                 // Open session target: once, on the shot that reaches it (spec §2.3).
-                if (mEngine.workout() == nullptr && mSettings.openTarget > 0 &&
-                    mEngine.session().count == mSettings.openTarget) {
+                const bool targetHit = mEngine.workout() == nullptr && mSettings.openTarget > 0 &&
+                                       mEngine.session().count == mSettings.openTarget;
+                if (targetHit || ev == Event::StepDone || ev == Event::WorkoutDone) {
                     haptic(HapticEvent::Alert);
                     backlightOn();
+                    alerted = true;
+                } else {
+                    if (made) {
+                        const uint8_t streak = mEngine.currentStreak();
+                        haptic(streak == 5                          ? HapticEvent::Streak5
+                               : (streak >= 10 && streak % 10 == 0) ? HapticEvent::Streak10
+                                                                    : HapticEvent::Make);
+                    } else {
+                        haptic(HapticEvent::Miss);
+                    }
+                    if (mSettings.backlightOnShot) backlightOn();
                 }
+                autosave();
             }
             pushSnapshot();
-            onEvent(ev);
+            onEvent(ev, !alerted);
         } break;
 
         case CustomMessage::UNDO: {
@@ -282,6 +288,14 @@ void Service::handleMessage(SDK::MessageBase* msg)
             sendHistory();
             break;
 
+        case CustomMessage::GET_SPOT_STATS:
+            sendSpotStats();
+            break;
+
+        case CustomMessage::CLEAR_HISTORY:
+            clearHistory();
+            break;
+
         case CustomMessage::SET_SETTINGS:
             applySettings(static_cast<CustomMessage::SetSettings*>(msg)->settings);
             break;
@@ -310,11 +324,13 @@ void Service::pushSnapshot()
     SDK::send_msg<CustomMessage::SnapshotMsg>(mKernel, mEngine.snapshot());
 }
 
-void Service::onEvent(Event ev)
+void Service::onEvent(Event ev, bool alert)
 {
     if (ev == Event::None) return;
-    haptic(HapticEvent::Alert);
-    backlightOn();
+    if (alert) {
+        haptic(HapticEvent::Alert);
+        backlightOn();
+    }
     if (ev == Event::RestOver || !mGuiStarted) return;
 
     // StepDone / WorkoutDone: the finished step's result plus the step that follows.
@@ -390,15 +406,57 @@ void Service::sendResults(uint32_t sessionId)
 
 void Service::sendHistory()
 {
-    // One page of the newest rows (total = offset = 0 for now); Task 6 streams every page.
-    auto m = SDK::make_msg<CustomMessage::History>(mKernel);
-    if (!m) return;
-    for (uint8_t i = 0; i < score::kTrendCount; ++i) {
-        const score::SessionSummary* row = mIndex.newest(i);
-        if (!row) break;
-        m->items[m->count++] = *row;
+    // Every row, newest first, in pages of kTrendCount; an empty index is one page {0, 0, 0}.
+    const uint8_t total = mIndex.count;
+    uint8_t offset = 0;
+    do {
+        auto m = SDK::make_msg<CustomMessage::History>(mKernel);
+        if (!m) {
+            LOG_WARNING("sendHistory: no message block, stopped at %u/%u rows\n", offset, total);
+            return;
+        }
+        m->total  = total;
+        m->offset = offset;
+        for (uint8_t i = 0; i < score::kTrendCount; ++i) {
+            const score::SessionSummary* row = mIndex.newest(static_cast<uint8_t>(offset + i));
+            if (!row) break;
+            m->items[m->count++] = *row;
+        }
+        m.send();
+        offset = static_cast<uint8_t>(offset + score::kTrendCount);
+    } while (offset < total);
+}
+
+void Service::sendSpotStats()
+{
+    auto m = SDK::make_msg<CustomMessage::SpotStats>(mKernel);
+    if (!m) {
+        LOG_WARNING("sendSpotStats: no message block\n");
+        return;
     }
+    std::memcpy(m->last, mIndex.last, sizeof(m->last));
+    std::memcpy(m->best, mIndex.best, sizeof(m->best));
     m.send();
+}
+
+void Service::clearHistory()
+{
+    // The emptied index goes to flash before any file is removed: a crash or a
+    // failed write leaves at worst orphan files, never rows whose file is gone.
+    uint32_t ids[score::kIndexCapacity];
+    const uint8_t n = mIndex.count;
+    for (uint8_t i = 0; i < n; ++i) ids[i] = mIndex.items[i].id;
+    mIndex.clear();
+    mLoaded      = score::Session{};
+    mLastEndedId = 0;
+    if (mStorage.saveIndex(mIndex)) {
+        for (uint8_t i = 0; i < n; ++i) mStorage.removeSession(ids[i]);   // .bin and .csv
+        LOG_INFO("history cleared: %u sessions removed\n", n);
+    } else {
+        LOG_WARNING("history cleared in memory only: index not written, %u session files kept\n", n);
+    }
+    sendHistory();
+    sendSpotStats();
 }
 
 void Service::sendLocalTime()
@@ -476,7 +534,17 @@ void Service::finishSession(bool save)
         pushSnapshot();
         return;
     }
-    const uint32_t evicted = mIndex.push(score::summarize(s, todayYmd()));
+    const uint32_t ymd = todayYmd();
+    const score::SessionStats st = score::SessionStats::compute(s);   // 88 B
+    const uint32_t evicted = mIndex.push(score::summarize(s, ymd));
+    mIndex.recordSpots(st.spot);
+    // The CSV before the index file: a crash in between leaves at worst an orphan CSV.
+    if (mSettings.csvExport) {
+        char name[score::kNameLen + 1];
+        workoutNameOf(s.workoutId, name);
+        if (!mStorage.saveSessionCsv(s, ymd, name))
+            LOG_WARNING("session %lu: CSV not written\n", static_cast<unsigned long>(s.id));
+    }
     if (evicted != 0) {
         mStorage.removeSession(evicted);
         if (mLoaded.id == evicted) mLoaded = score::Session{};
@@ -575,6 +643,21 @@ void Service::restoreCurrent()
         mStorage.clearCurrent();
     }
     mLoaded = score::Session{};
+}
+
+void Service::workoutNameOf(uint16_t id, char (&out)[score::kNameLen + 1]) const
+{
+    const score::Workout* w = nullptr;
+    if (id != 0 && id <= UINT8_MAX) {
+        w = score::findPreset(static_cast<uint8_t>(id));
+        if (!w) w = mWorkouts.find(static_cast<uint8_t>(id));
+    }
+    if (w) {
+        std::memcpy(out, w->name, score::kNameLen);   // name[] need not be NUL-terminated
+        out[score::kNameLen] = '\0';
+    } else {
+        std::snprintf(out, sizeof(out), "%s", id == 0 ? "Open" : "Custom");
+    }
 }
 
 void Service::autosave()

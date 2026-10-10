@@ -32,16 +32,21 @@ private:
     void handleMessage(SDK::MessageBase* msg);
     void onSecond();
     void pushSnapshot();
-    void onEvent(score::SessionEngine::Event ev);
+    /// @p alert: play the Alert haptic and turn the backlight on (false when the caller already did).
+    void onEvent(score::SessionEngine::Event ev, bool alert = true);
     void sendUndoResult(bool ok, bool made);
     void sendWorkouts();
     void sendResults(uint32_t sessionId);
     void sendHistory();
+    void sendSpotStats();
+    void clearHistory();
     void sendLocalTime();
     void sendSettings();
     void applySettings(const score::Settings& s);
     void finishSession(bool save);
     void restoreCurrent();
+    /// Display name of workout @p id into @p out (NUL-terminated): preset, user workout, "Open" (0) or "Custom".
+    void workoutNameOf(uint16_t id, char (&out)[score::kNameLen + 1]) const;
     void autosave();
     void connectHr();
     void handleSensorsData(uint16_t handle, SDK::Sensor::DataBatch& data);

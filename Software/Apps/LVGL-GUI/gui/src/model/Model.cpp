@@ -251,6 +251,7 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
 
         case CustomMessage::HISTORY: {
             auto* msg      = static_cast<CustomMessage::History*>(message);
+            if (msg->offset != 0) break;   // interim until paged history (Task 8): newest page only
             mHistory.count = msg->count;
             memcpy(mHistory.items, msg->items, sizeof(mHistory.items));
             mHasHistory = true;
