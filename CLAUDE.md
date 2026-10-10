@@ -86,7 +86,7 @@ Two processes, as every UNA app:
   arrive), Settings.
 - LVGL pool `LV_MEM_SIZE` 56 KB (both CMake files): peak 23 752 B ≈ 23.2 KB in the full self-test walk
   (SpotPicker → Active change-spot switch). RAM (`arm-none-eabi-size`): GUI data+bss 161 980 B ≈ 158 KB of
-  600 KB, service 20 032 B ≈ 20 KB of 500 KB; `Hoops_0.0.0-dev.uapp` 307 872 B.
+  600 KB, service 20 032 B ≈ 20 KB of 500 KB; `Hoops_0.0.0-dev.uapp` 308 748 B.
 
 ## Environment
 
@@ -313,9 +313,9 @@ crash-resume 9/9, 66 host tests.
 v2 complete (2026-10-10, branch `v2`, Tasks 1–14): Settings screen + `settings.bin`, haptics levels, open
 target, hold-DOWN option, light scheme, full paged history, spot last/best records ('HIX2'), CSV export, clear
 history, streak haptics + toast, date refresh, idle timeout on every menu screen, icons, store previews,
-listing, manifest and packaging script. Verified (2026-10-11): 89 host tests; self-test 117/117 and
+listing, manifest and packaging script. Verified (2026-10-11): 90 host tests; self-test 117/117 and
 crash-resume 9/9 headless; LVGL pool peak 23 752 B; GUI data+bss 161 980 B, service 20 032 B;
-`Hoops_0.0.0-dev.uapp` 307 872 B; `tools/package_store.sh --allow-placeholder` packs `dist/Hoops-0.0.0-dev.zip`.
+`Hoops_0.0.0-dev.uapp` 308 748 B; `tools/package_store.sh --allow-placeholder` packs `dist/Hoops-0.0.0-dev.zip`.
 Final review fixes (2026-10-11): pull-based history paging (`GET_HISTORY{offset, seq}`, one page per request),
 GET_SETTINGS + Settings "Loading…" guard, first-page-only requests from Home/Settings, WORKOUT_SAVED sent alone,
 evicted session files removed after the index write; 90 host tests, self-test 117/117, crash-resume 9/9,
