@@ -66,6 +66,7 @@ target_include_directories(HoopsSimulator PRIVATE
 target_compile_definitions(HoopsSimulator PRIVATE
     ${UNA_SDK_DEFINES_SIMULATOR}
     ${UNA_SDK_DEFINES_GUI_LVGL}
+    "LV_MEM_SIZE=(56U*1024U)"  # as in Hoops-CMake/CMakeLists.txt
     APP_ID="13F039C6FE024E86"
     DEV_ID="UNA Simulator"
     BUILD_VERSION="1.0.0-sim"

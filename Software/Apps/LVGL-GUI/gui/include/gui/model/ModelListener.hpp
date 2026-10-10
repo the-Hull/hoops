@@ -3,26 +3,43 @@
  * @file    ModelListener.hpp
  * @brief   Events the Model raises towards the active screen.
  *
- * Buttons' model has nothing to report; later tutorials add virtual methods
- * here (sensor values, file results) that the screen overrides.
+ * The Model binds exactly one listener (the screen on display) and calls
+ * these as service messages arrive; the payloads are the service's, copied
+ * verbatim. onSuspend() lets a screen cancel a hold in progress, since no
+ * button release reaches it while the GUI is off screen.
  ******************************************************************************
  */
 
-#ifndef MODEL_LISTENER_HPP
-#define MODEL_LISTENER_HPP
+#ifndef MODELLISTENER_HPP
+#define MODELLISTENER_HPP
+
+#include <cstdint>
+
+#include "Commands.hpp"
+#include "score/SessionEngine.hpp"
 
 class Model;
 
 class ModelListener
 {
 public:
-    ModelListener() : model(nullptr) {}
     virtual ~ModelListener() = default;
 
-    void bind(Model* m) { model = m; }
+    virtual void onSnapshot(const score::Snapshot& s) { (void)s; }
+    virtual void onStepDone(const CustomMessage::StepDone& d) { (void)d; }
+    virtual void onUndoResult(bool ok, bool made) { (void)ok; (void)made; }
+    virtual void onWorkouts() {}                          ///< user workout list complete
+    virtual void onWorkoutSaved(uint8_t id) { (void)id; } ///< 0 = refused
+    virtual void onResults() {}                           ///< a RESULTS reply arrived
+    virtual void onHistory() {}
+    virtual void onSaved(uint32_t id) { (void)id; }       ///< session saved under id
+    virtual void onIdleTimeout() {}
+    virtual void onSuspend() {}
+    virtual void onResume() {}
 
 protected:
-    Model* model;
+    Model* model = nullptr;   ///< set by Model::bind()
+    friend class Model;
 };
 
-#endif // MODEL_LISTENER_HPP
+#endif // MODELLISTENER_HPP

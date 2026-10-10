@@ -65,6 +65,10 @@ set(GUI_INCLUDE_DIRS
 )
 set(GUI_COMPILE_DEFINITIONS
     ${UNA_SDK_DEFINES_GUI_LVGL}
+    # A 56 KB LVGL pool, above the SDK's 40 KB default, as RunLVGL uses: two
+    # screens' widget trees coexist during a switch. The simulator's
+    # CMakeLists.txt sets the same.
+    "LV_MEM_SIZE=(56U*1024U)"
 )
 # LVGL's software renderer recurses deeper than TouchGFX; give the GUI task
 # more stack than the 10 KB default.
