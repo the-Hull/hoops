@@ -83,6 +83,12 @@ void Model::requestWorkouts()
     if (mWorkoutsPending && mFrame - mWorkoutsAskedAt < kWorkoutsRetryFrames) {
         return;
     }
+    mWorkoutsRetried = false;   // a fresh request gets its own automatic re-ask
+    sendGetWorkouts();
+}
+
+void Model::sendGetWorkouts()
+{
     mWorkoutsPending = true;
     mWorkoutsAskedAt = mFrame;
     SDK::send_msg<CustomMessage::GetWorkouts>(mKernel);
@@ -300,23 +306,46 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
             auto* msg = static_cast<CustomMessage::WorkoutItem*>(message);
             if (msg->count == 0) {           // {0, 0, {}}: the list is empty
                 mUserCount       = 0;
+                mWorkoutsSeen    = 0;
                 mWorkoutsLoaded  = true;
                 mWorkoutsPending = false;
+                mWorkoutsRetried = false;
                 l->onWorkouts();
                 break;
             }
             if (msg->index == 0) {
                 mWorkoutsLoaded = false;     // a fresh list starts
+                mWorkoutsSeen   = 0;
             }
             const uint8_t count = msg->count < score::kMaxUserWorkouts ? msg->count : score::kMaxUserWorkouts;
             mUserCount = count;
             if (msg->index < count) {
                 mUserWorkouts[msg->index] = msg->workout;
+                mWorkoutsSeen = static_cast<uint16_t>(mWorkoutsSeen | (1u << msg->index));
             }
             if (msg->index + 1 == msg->count) {
-                mWorkoutsLoaded  = true;
-                mWorkoutsPending = false;
-                l->onWorkouts();
+                // The GUI queue evicts the oldest message when a frame brings
+                // more than 10 (10 items + the 1 Hz SNAPSHOT), so an early
+                // item can be missing: never call such a list loaded.
+                const uint16_t all  = static_cast<uint16_t>((1u << count) - 1u);
+                const bool complete = (mWorkoutsSeen & all) == all;
+                mWorkoutsSeen = 0;           // the next list starts clean even without its item 0
+                if (complete) {
+                    mWorkoutsLoaded  = true;
+                    mWorkoutsPending = false;
+                    mWorkoutsRetried = false;
+                    l->onWorkouts();
+                } else if (!mWorkoutsRetried) {
+                    // Ask once more, past the 1 s guard: the reply lands
+                    // a frame later, away from the burst that lost the item.
+                    LOG_WARNING("workout list incomplete (%u items), asked again\n", count);
+                    mWorkoutsRetried = true;
+                    sendGetWorkouts();
+                } else {
+                    // Lost twice: give up until a screen asks again.
+                    LOG_WARNING("workout list incomplete again (%u items), not loaded\n", count);
+                    mWorkoutsPending = false;
+                }
             }
         } break;
 

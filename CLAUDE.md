@@ -200,7 +200,8 @@ and `--check`, zips) → upload `dist/Hoops-<ver>.zip` → Version → Upload Ne
   log "Queue for custom messages is full"). The queue is drained once per 100 ms frame, before the keys. Never
   burst: a reply plus whatever else can land in the same frame (the 1 Hz SNAPSHOT while a session runs, other
   requests sent in that frame) must stay ≤ 10. Today: GUI_RUN = SETTINGS + LOCAL_TIME + SNAPSHOT; GET_WORKOUTS =
-  ≤ 10 WORKOUT_ITEMs (the largest reply); everything else is one or two messages; history is pulled page by page.
+  ≤ 10 WORKOUT_ITEMs (the largest reply; with the 1 Hz SNAPSHOT it can reach 11 — the Model re-asks once
+  for a list with a gap, see Known limitations); everything else is one or two messages; history is pulled page by page.
 - Docs: https://www.developers.unawatch.com/sdk-v1.5.0/ (index: genindex.html). Pick pages by title.
 
 ## Decided UX (mockups are the source of truth where the spec differs)
@@ -328,8 +329,10 @@ Known limitations / next:
 - A history page lost on the way (none expected now: one is in flight at a time) stalls that stream until the
   screen asks again (re-entering History). A full History takes 1 + 10 round trips (~1.1 s at 100 ms frames).
 - GET_WORKOUTS' 10 items plus a 1 Hz SNAPSHOT landing in the same frame (10 user workouts and a session
-  running) is 11 messages: item 0 would be evicted and the list held keeps a stale first workout. Not seen;
-  make the list pull-based too if it shows up.
+  running) is 11 messages and evicts item 0. The Model tracks the indices received (bitmask): a list with a
+  gap is never marked loaded; it asks once more at once (past the 1 s guard; the reply lands a frame later,
+  away from the snapshot) and raises `onWorkouts()` only when all items are in. A second loss gives up until
+  a screen asks again (the waiting screen stays on "Loading…"; re-enter it).
 - `appVersion` in the store manifest is the `.uapp` version verbatim, git suffix included (`0.0.0-dev`,
   `X.Y.Z-<n>-<hash>`): package from a commit tagged `apps-vX.Y.Z`.
 - The streak is capped at 255 (`uint8_t`), so the streak-10 haptic and toast stop after 250 in a row.

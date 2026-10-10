@@ -1395,17 +1395,15 @@ bool seededRows(const Model& m, uint8_t n)
     return true;
 }
 
-/// History's line 2 for row @p i ("m/a · p %", drawn " - ").
-void historyLine2(const Model& m, uint8_t i, char* out, size_t n)
+/// History's line 1 for the oldest seeded row ("d.m. · Open", drawn " - "):
+/// the seed spaces its 50 sessions a day apart, so the date is unique (line 2,
+/// "m/a · p %", repeats), and seed 0 is an open session.
+void oldestHistoryLine1(const Model& m, char* out, size_t n)
 {
-    const score::SessionSummary& r = m.historyItem(i);
-    unsigned makes = 0;
-    unsigned att   = 0;
-    for (uint8_t c = 0; c < score::kCategoryCount; ++c) {
-        makes += r.catMakes[c];
-        att   += r.catAtt[c];
-    }
-    snprintf(out, n, "%u/%u - %u %%", makes, att, static_cast<unsigned>(r.totalPct));
+    const score::SessionSummary& r = m.historyItem(score::kIndexCapacity - 1);
+    char date[12];
+    Theme::fmtDate(date, sizeof(date), r.ymd);
+    snprintf(out, n, "%s - %s", date, r.workoutId == 0 ? "Open" : "(not an open session)");
 }
 
 // Start-up: SETTINGS and LOCAL_TIME in, Home pulled the first page only (5 of 50).
@@ -1427,8 +1425,8 @@ bool p3HistoryLoading(const Model& m)
 bool p3History50(const Model& m)
 {
     LOG_INFO("p3 history: %u of %u rows, %u workouts\n", m.historyCount(), m.historyTotal(), m.userWorkoutCount());
-    char oldest[24];
-    historyLine2(m, score::kIndexCapacity - 1, oldest, sizeof(oldest));
+    char oldest[40];
+    oldestHistoryLine1(m, oldest, sizeof(oldest));
     return onScreen(ScreenId::History) && m.historyComplete() && m.historyCount() == score::kIndexCapacity
         && seededRows(m, score::kIndexCapacity) && m.workoutsLoaded()
         && m.userWorkoutCount() == score::kMaxUserWorkouts && !visibleLabel("Loading\xE2\x80\xA6")
@@ -1442,8 +1440,8 @@ bool p3ResultsOldest(const Model& m)
 }
 bool p3HistoryAgain(const Model& m)
 {
-    char oldest[24];
-    historyLine2(m, score::kIndexCapacity - 1, oldest, sizeof(oldest));
+    char oldest[40];
+    oldestHistoryLine1(m, oldest, sizeof(oldest));
     return onScreen(ScreenId::History) && m.historyComplete() && m.historyCount() == score::kIndexCapacity
         && menuSelected(oldest);
 }

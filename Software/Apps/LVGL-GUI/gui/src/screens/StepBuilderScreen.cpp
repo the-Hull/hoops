@@ -595,8 +595,8 @@ void StepBuilderScreen::onWorkoutSaved(uint8_t id)
         toast("Not saved");
         return;
     }
-    // The Model marked the list held stale on WORKOUT_SAVED (the service
-    // streams the fresh one right after it), so the preview waits for it.
+    // On WORKOUT_SAVED the Model marked the list held stale and asked the
+    // service for the fresh one (GET_WORKOUTS), so the preview waits for it.
     mModel.selectedWorkoutId = id;
     ScreenManager::instance().goTo(ScreenId::WorkoutPreview);
 }

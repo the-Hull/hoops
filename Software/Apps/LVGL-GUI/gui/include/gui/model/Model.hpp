@@ -204,6 +204,10 @@ private:
     static constexpr uint32_t kWorkoutsRetryFrames = 10;   ///< 1 s
     bool           mWorkoutsPending = false;   ///< GET_WORKOUTS sent, list not complete yet
     uint32_t       mWorkoutsAskedAt = 0;       ///< mFrame of that request
+    uint16_t       mWorkoutsSeen    = 0;       ///< bit i: item i of the list coming in arrived
+    bool           mWorkoutsRetried = false;   ///< the one automatic re-ask of this request is used
+    static_assert(score::kMaxUserWorkouts <= 16, "mWorkoutsSeen holds one bit per user workout");
+    void sendGetWorkouts();
 
     CustomMessage::Results mResults;
     bool                   mHasResults = false;
