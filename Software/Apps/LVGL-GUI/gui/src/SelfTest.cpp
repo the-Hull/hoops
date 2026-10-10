@@ -93,15 +93,29 @@ bool resultsPage3(const Model& m)
     return onScreen(ScreenId::Results) && m.resultsPage == 2 && onScreenLabel("3", Theme::kAccent)
         && onScreenLabel("STREAK");
 }
+// Trend on 3PT: this session 3/5 = 60 % against session 1's 4/4 = 100 %.
 bool resultsPage4(const Model& m)
 {
-    return onScreen(ScreenId::Results) && m.resultsPage == 3 && onScreenLabel("TREND - 4 / 4");
+    return onScreen(ScreenId::Results) && m.resultsPage == 3 && onScreenLabel("TREND - 4 / 4")
+        && onScreenLabel("3PT", Theme::kAccent) && onScreenLabel("60 %") && onScreenLabel("-40 vs last", Theme::kBad);
 }
+// The newest row is session 3, selected: "d.m. · Open" / "5/9 · 56 %".
+bool historyLists(const Model& m)
+{
+    return onScreen(ScreenId::History) && m.hasHistory() && m.history().count > 0
+        && onScreenLabel(" - Open", 0, true) && onScreenLabel("5/9 - 56 %");
+}
+bool resultsFromHistory(const Model& m)
+{
+    return resultsPage1(m) && m.resultsFrom == Model::ResultsFrom::History && m.hasResults()
+        && m.results().sessionId == m.resultsSessionId && m.history().items[0].id == m.resultsSessionId;
+}
+bool onHistory(const Model&) { return onScreen(ScreenId::History); }
 
 // Three sessions: the first is played, changes spot (hold DOWN, navigation
 // on the release), pauses, resumes and is saved (Results); the second is
 // discarded through the double SELECT; the third covers three spots and is
-// saved, and its results are paged through.
+// saved, its results are paged through, then reopened from History.
 const Step kSteps[] = {
     { 1500, nullptr, nullptr, '3', "Home: SELECT Open Session -> SpotPicker" },
     {  500, nullptr, nullptr, '2', "SpotPicker: DOWN" },
@@ -187,6 +201,16 @@ const Step kSteps[] = {
     {  500, resultsPage1, "Results wrapped to page 1",
                              '4', "Results: BACK -> Home" },
     { 1000, onHome, "on Home after Results",
+                             '2', "Home: DOWN (Workouts)" },
+    {  400, nullptr, nullptr, '2', "Home: DOWN (History)" },
+    {  400, nullptr, nullptr, '3', "Home: SELECT -> History" },
+    { 1000, historyLists, "History lists the saved session",
+                             '3', "History: SELECT -> Results of that session" },
+    { 1500, resultsFromHistory, "Results page 1 of the session opened from History",
+                             '4', "Results: BACK -> History" },
+    { 1000, onHistory, "back on History",
+                             '4', "History: BACK -> Home" },
+    { 1000, onHome, "on Home after History",
                              '4', "Home: BACK -> exit app" },
 };
 constexpr uint32_t kCount = sizeof(kSteps) / sizeof(kSteps[0]);

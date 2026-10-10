@@ -62,6 +62,24 @@ constexpr int32_t kHrY        = 202;
 constexpr int32_t kHrW        = 175;
 constexpr int32_t kHeartR     = 3;
 
+// Page 4
+constexpr uint8_t kTrendTotal = score::kCategoryCount;   // after the categories
+constexpr uint8_t kBars       = score::kTrendCount;
+constexpr int32_t kTrendCatY  = 58;
+constexpr int32_t kTrendPctY  = 86;   // mockup 90: clear of a 100 % bar's label
+constexpr int32_t kChartLeft  = 38;
+constexpr int32_t kChartRight = 202;
+constexpr int32_t kChartBase  = 190;   // bars stand on this line
+constexpr int32_t kBarX[kBars] = { 50, 85, 120, 155, 190 };   // newest on the right
+constexpr int32_t kBarW       = 19;
+constexpr int32_t kBarR       = 3;
+constexpr int32_t kPlotH1000  = 768;   // px per 1000 % (77 px for 100 %)
+constexpr int32_t kSlotW      = 35;
+constexpr int32_t kDateGap    = 4;     // between neighbouring dates
+constexpr int32_t kTodayExtra = 8;     // the newest date may spill right
+constexpr int32_t kValueGap   = 8;     // bar top .. value label centre
+constexpr int32_t kDateY      = 202;
+
 constexpr const char* kDot = " \xC2\xB7 ";   // " · " (rendered " - ")
 
 // --- Text helpers ------------------------------------------------------------
@@ -132,6 +150,28 @@ void fmtPct(char* out, size_t n, const score::SpotStat& s)
     }
 }
 
+/// One bar of the trend: a session's percentage in the shown category.
+struct TrendPoint {
+    uint8_t  pct;
+    bool     has;   ///< attempts in the category
+    uint32_t ymd;
+};
+
+/// Trend values of a saved session (category, or kTrendTotal). The total
+/// is the service's totalPct; the category sum only tells whether there
+/// were attempts.
+TrendPoint trendPoint(const score::SessionSummary& it, uint8_t cat)
+{
+    if (cat < score::kCategoryCount) {
+        return { score::pct(it.catMakes[cat], it.catAtt[cat]), it.catAtt[cat] > 0, it.ymd };
+    }
+    uint32_t att = 0;
+    for (uint8_t c = 0; c < score::kCategoryCount; ++c) {
+        att += it.catAtt[c];
+    }
+    return { it.totalPct, att > 0, it.ymd };
+}
+
 uint32_t colorOf(const score::SpotStat& s)
 {
     return Theme::pctColor(s.makes, s.attempts);
@@ -196,6 +236,7 @@ void ResultsScreen::build()
 
 void ResultsScreen::onShow()
 {
+    mModel.requestHistory();   // the trend's older sessions
     if (!mModel.hasResults()) {
         mWaiting = true;
         mModel.requestResults(mModel.resultsFrom == Model::ResultsFrom::History ? mModel.resultsSessionId : 0);
@@ -440,8 +481,110 @@ void ResultsScreen::buildHighlights()
 
 void ResultsScreen::buildTrend()
 {
-    Theme::label(mPageObj, Font::Regular16, "No history yet", 20, Theme::topFor(Font::Regular16, 120), 200,
-                 LV_TEXT_ALIGN_CENTER, Theme::kDim);
+    const CustomMessage::Results& r = mModel.results();
+
+    // Category name, upper case as in the mockup.
+    char name[24];
+    snprintf(name, sizeof(name), "%s",
+             mTrendCat < kTrendTotal ? score::categoryName(static_cast<score::Category>(mTrendCat)) : "Total");
+    for (char* p = name; *p; ++p) {
+        if (*p >= 'a' && *p <= 'z') {
+            *p = static_cast<char>(*p - 'a' + 'A');
+        }
+    }
+    Theme::label(mPageObj, Font::SemiBold20, name, 20, Theme::topFor(Font::SemiBold20, kTrendCatY), 200,
+                 LV_TEXT_ALIGN_CENTER, Theme::kAccent);
+
+    // The newest bar is the session viewed; then the older history rows
+    // (after it in the newest-first list, or all of them when it is not
+    // listed) that have attempts in the category.
+    const score::SpotStat& cs = mTrendCat < kTrendTotal ? r.stats.cat[mTrendCat] : r.stats.total;
+    const TrendPoint current = { score::pct(cs.makes, cs.attempts), cs.attempts > 0, r.ymd };
+    TrendPoint older[kBars - 1] = {};
+    uint8_t    nOlder = 0;
+    if (mModel.hasHistory()) {
+        const CustomMessage::History& h = mModel.history();
+        const uint8_t count = h.count < kBars ? h.count : kBars;
+        uint8_t first = 0;
+        for (uint8_t i = 0; i < count; ++i) {
+            if (h.items[i].id == r.sessionId) {
+                first = static_cast<uint8_t>(i + 1);
+            }
+        }
+        for (uint8_t i = first; i < count && nOlder < kBars - 1; ++i) {
+            const TrendPoint p = trendPoint(h.items[i], mTrendCat);
+            if (p.has && h.items[i].id != r.sessionId) {
+                older[nOlder++] = p;
+            }
+        }
+    }
+
+    // "60 %" and, against the nearest older session, "+6 vs last".
+    char pct[12];
+    if (current.has) {
+        snprintf(pct, sizeof(pct), "%u %%", static_cast<unsigned>(current.pct));
+    } else {
+        snprintf(pct, sizeof(pct), "--");
+    }
+    if (current.has && nOlder > 0) {
+        const int delta = static_cast<int>(current.pct) - static_cast<int>(older[0].pct);
+        char vs[20];
+        snprintf(vs, sizeof(vs), "%+d vs last", delta);
+        const uint32_t c = delta > 0 ? Theme::kGood : (delta < 0 ? Theme::kBad : Theme::kDim);
+        pair(mPageObj, Font::SemiBold35, pct, Theme::kText, Font::SemiBold20, vs, c, kTrendPctY, 8);
+    } else {
+        Theme::label(mPageObj, Font::SemiBold35, pct, 20, Theme::topFor(Font::SemiBold35, kTrendPctY), 200,
+                     LV_TEXT_ALIGN_CENTER, current.has ? Theme::kText : Theme::kDim);
+    }
+
+    // Chart.
+    Theme::box(mPageObj, kChartLeft, kChartBase, kChartRight - kChartLeft, 2, Theme::kLine);
+    const uint32_t today = mModel.todayYmd();
+    for (uint8_t b = 0; b <= nOlder; ++b) {
+        const bool        newest = b == 0;
+        const TrendPoint& p      = newest ? current : older[b - 1];
+        const int32_t     x      = kBarX[kBars - 1 - b];
+        const uint32_t    color  = newest ? Theme::kAccent : Theme::kDim;
+        const uint32_t    text   = newest ? Theme::kText : Theme::kDim;
+
+        int32_t h = 0;
+        if (p.has) {
+            h = p.pct * kPlotH1000 / 1000;
+            h = h < 2 ? 2 : h;
+            Theme::box(mPageObj, x - kBarW / 2, kChartBase - h, kBarW, h, color, kBarR);
+        }
+        char value[8];
+        snprintf(value, sizeof(value), p.has ? "%u" : "--", static_cast<unsigned>(p.pct));
+        Theme::label(mPageObj, Font::Regular14, value, x - kSlotW / 2,
+                     Theme::topFor(Font::Regular14, kChartBase - h - kValueGap), kSlotW, LV_TEXT_ALIGN_CENTER, text);
+
+        // Date under the newest bar of each day: "Today", "6.10.", or
+        // shorter forms when the slot is narrow.
+        const TrendPoint* newer = b == 0 ? nullptr : (b == 1 ? &current : &older[b - 2]);
+        if (newer && newer->ymd == p.ymd) {
+            continue;
+        }
+
+        char full[12];
+        Theme::fmtDate(full, sizeof(full), p.ymd);
+        char noDot[12];
+        snprintf(noDot, sizeof(noDot), "%s", full);
+        const size_t len = strlen(noDot);
+        if (len > 1 && noDot[len - 1] == '.') {
+            noDot[len - 1] = '\0';
+        }
+        char day[12];
+        snprintf(day, sizeof(day), "%s", full);
+        if (char* dot = strchr(day, '.')) {
+            dot[1] = '\0';
+        }
+        const bool isToday = newest && today != 0 && p.ymd == today;
+        const char* dates[] = { isToday ? "Today" : full, full, noDot, day };
+        constexpr Font kDateFont[] = { Font::Regular14 };
+        const int32_t w = kSlotW - kDateGap + (newest ? kTodayExtra : 0);
+        fitLabel(mPageObj, dates, 4, kDateFont, 1, newest ? x - kSlotW / 2 : x - w / 2, w, kDateY,
+                 LV_TEXT_ALIGN_CENTER, text);
+    }
 }
 
 // --- Input -------------------------------------------------------------------
@@ -478,7 +621,7 @@ void ResultsScreen::step(int8_t dir)
             mCat = static_cast<uint8_t>((mCat + score::kCategoryCount + dir) % score::kCategoryCount);
             break;
         case kTrend:
-            mTrendCat = static_cast<uint8_t>((mTrendCat + score::kCategoryCount + 1 + dir) % (score::kCategoryCount + 1));
+            mTrendCat = static_cast<uint8_t>((mTrendCat + kTrendTotal + 1 + dir) % (kTrendTotal + 1));
             break;
         default:
             return;

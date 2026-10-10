@@ -16,6 +16,7 @@
 #include "gui/model/Model.hpp"
 #include "gui/screens/Screen.hpp"
 #include "gui/screens/ActiveScreen.hpp"
+#include "gui/screens/HistoryScreen.hpp"
 #include "gui/screens/HomeScreen.hpp"
 #include "gui/screens/PauseScreen.hpp"
 #include "gui/screens/ResultsScreen.hpp"
@@ -114,6 +115,8 @@ Screen* ScreenManager::create(ScreenId id)
             return new PauseScreen(m);
         case ScreenId::Results:
             return new ResultsScreen(m);
+        case ScreenId::History:
+            return new HistoryScreen(m);
 
         // Not built yet (later tasks): fall back to Home so the app never
         // dead-ends.
@@ -121,7 +124,6 @@ Screen* ScreenManager::create(ScreenId id)
         case ScreenId::WorkoutPreview:
         case ScreenId::StepBuilder:
         case ScreenId::Rest:
-        case ScreenId::History:
             LOG_WARNING("Screen %u not implemented, showing Home\n", static_cast<unsigned>(id));
             return new HomeScreen(m);
     }
