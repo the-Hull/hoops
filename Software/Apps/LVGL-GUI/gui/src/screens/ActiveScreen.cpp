@@ -9,6 +9,7 @@
 
 #include <cstdio>
 
+#include "score/Settings.hpp"
 #include "score/Spots.hpp"
 #include "score/Stats.hpp"
 #include "score/Workout.hpp"
@@ -124,6 +125,7 @@ void ActiveScreen::onShow()
     const auto st = mModel.hasSnapshot() ? static_cast<score::SessionState>(mModel.snapshot().state)
                                          : score::SessionState::Idle;
     mLiveSeen   = false;
+    mPrevValid  = false;
     mHasLeaving = st != score::SessionState::Active && st != score::SessionState::Rest;
     mLeaving    = st;
     if (mModel.resumeEntry) {
@@ -168,6 +170,7 @@ void ActiveScreen::liveTimerCb(lv_timer_t* t)
         case score::SessionState::Active:
             self->mLiveSeen = true;   // running, and nothing says it predates us
             self->rebuild(m.snapshot());
+            self->trackLive(m.snapshot());
             break;
         case score::SessionState::Rest:   sm.goTo(ScreenId::Rest); break;
         case score::SessionState::Paused: sm.goTo(ScreenId::Pause); break;
@@ -230,8 +233,15 @@ void ActiveScreen::rebuildOpen(const score::Snapshot& s)
 {
     applyLayout(false);
     showBody(s, s.spotMakes, s.spotAttempts);
-    const uint8_t pct = score::pct(s.spotMakes, s.spotAttempts);
-    mRing->setProgress(static_cast<uint16_t>(pct) * 10u, Theme::pctColor(s.spotMakes, s.spotAttempts));
+    const uint16_t target = mModel.settings().openTarget;
+    if (target > 0) {
+        // Session attempts against the Open target, coloured by the session.
+        const uint32_t permille = s.totalAttempts >= target ? 1000u : s.totalAttempts * 1000u / target;
+        mRing->setProgress(static_cast<uint16_t>(permille), Theme::pctColor(s.totalMakes, s.totalAttempts));
+    } else {
+        const uint8_t pct = score::pct(s.spotMakes, s.spotAttempts);
+        mRing->setProgress(static_cast<uint16_t>(pct) * 10u, Theme::pctColor(s.spotMakes, s.spotAttempts));
+    }
     showLast5(s.last5Count, s.last5Bits);
 }
 
@@ -444,6 +454,34 @@ void ActiveScreen::hideToast()
     lv_obj_set_y(mBody, 0);
 }
 
+void ActiveScreen::trackLive(const score::Snapshot& s)
+{
+    if (!mPrevValid) {
+        mPrevValid    = true;
+        mPrevAttempts = s.totalAttempts;
+        mPrevStreak   = s.streak;
+        return;
+    }
+    const uint16_t target = mModel.settings().openTarget;
+    const bool targetHit  = s.mode == score::Snapshot::kModeOpen && target > 0 && s.totalAttempts == target &&
+                            mPrevAttempts < target;
+    const bool streakHit  = s.streak > mPrevStreak && (s.streak == 5 || (s.streak >= 10 && s.streak % 10 == 0));
+    mPrevAttempts = s.totalAttempts;
+    mPrevStreak   = s.streak;
+
+    // A toast already showing (undo, hold hint, step done) stays.
+    if (toastShowing()) {
+        return;
+    }
+    if (targetHit) {
+        showToast("Target reached", kToastMs);
+    } else if (streakHit) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%u in a row!", static_cast<unsigned>(s.streak));
+        showToast(buf, kToastMs);
+    }
+}
+
 void ActiveScreen::toastTimerCb(lv_timer_t* t)
 {
     static_cast<ActiveScreen*>(lv_timer_get_user_data(t))->hideToast();   // deletes the timer
@@ -478,9 +516,12 @@ void ActiveScreen::onKey(uint8_t code)
 
 void ActiveScreen::onAction(KeyInput::Action a)
 {
+    const bool holdPauses = mWorkoutLayout ||
+                            static_cast<score::HoldDown>(mModel.settings().holdDown) == score::HoldDown::Pause;
     if (a.kind == KeyInput::Kind::Hold) {
-        // Open session, DOWN held past 500 ms: say what the release will do.
-        if (a.btn == KeyInput::Btn::Down && !mWorkoutLayout) {
+        // Open session, DOWN held past 500 ms to change spot: say what the
+        // release will do.
+        if (a.btn == KeyInput::Btn::Down && !holdPauses) {
             showToast("Release to change spot", kHoldToastMs);
             mHoldToast = true;
         }
@@ -491,8 +532,8 @@ void ActiveScreen::onAction(KeyInput::Action a)
     }
     if (a.kind == KeyInput::Kind::HoldRelease && a.btn == KeyInput::Btn::Down) {
         // Open session: change spot. A workout has no spot to change, so a
-        // hold pauses like a click.
-        if (mWorkoutLayout) {
+        // hold pauses like a click; so does any hold with Hold DOWN = Pause.
+        if (holdPauses) {
             pauseNow();
         } else {
             changeSpot();
@@ -518,6 +559,7 @@ void ActiveScreen::onSnapshot(const score::Snapshot& s)
     if (st == score::SessionState::Active) {
         mLiveSeen = true;
         rebuild(s);
+        trackLive(s);
         return;
     }
     if (st == score::SessionState::Rest) {

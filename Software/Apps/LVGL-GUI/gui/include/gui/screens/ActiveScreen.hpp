@@ -9,8 +9,9 @@
  * engine's Snapshot::stepBits). Keys: SELECT make, BACK miss, UP undo,
  * DOWN pause; holding DOWN in an open session opens the spot picker to
  * change spot, on the button's release so that release cannot reach the
- * picker (in a workout a hold pauses, like a click). While DOWN is held
- * past the hold time a toast says "Release to change spot"; any key hides it.
+ * picker (in a workout, or with the Hold DOWN setting = Pause, a hold pauses
+ * like a click). While DOWN is held past the hold time to change spot a
+ * toast says "Release to change spot"; any key hides it.
  * A long press of SELECT / BACK / UP counts like a click (KeyInput's
  * HoldRelease).
  *
@@ -23,6 +24,14 @@
  * group, the percentage and the footer (showBody()). A finished workout
  * step goes to the Rest screen (STEP_DONE with rest, or the last step), or
  * shows a 1.5 s toast when the next step starts at once (no rest).
+ *
+ * Open session with the Open target setting on: the ring shows the session's
+ * attempts against the target (coloured by the session percentage) and the
+ * shot that reaches it shows "Target reached". A streak of 5 makes, or of any
+ * multiple of 10, shows "5 in a row!". Both compare a live snapshot with the
+ * previous live one (the first after onShow() only sets the baseline) and
+ * never replace a toast already showing (undo, hold, step); the target toast
+ * wins over a streak on the same shot.
  ******************************************************************************
  */
 
@@ -91,6 +100,10 @@ private:
 
     void showToast(const char* text, uint32_t ms);
     void hideToast();
+    bool toastShowing() const { return mToastTimer != nullptr; }
+
+    /// Target / streak toasts from a live snapshot vs the previous live one.
+    void trackLive(const score::Snapshot& s);
 
     KeyInput               mKeys;
     std::unique_ptr<Ring>  mRing;
@@ -114,6 +127,12 @@ private:
     lv_timer_t* mLiveTimer  = nullptr;   ///< kLiveWaitMs after onShow()
     bool        mHoldToast  = false;   ///< the toast shown is the hold hint
     bool        mWorkoutLayout = false;
+
+    // The previous live snapshot's counters (trackLive()); set from the
+    // first live one after onShow(), so entering never toasts.
+    bool     mPrevValid    = false;
+    uint16_t mPrevAttempts = 0;
+    uint8_t  mPrevStreak   = 0;
 
     // Snapshots the service sent before it handled the intent that brought
     // us here (RESUME, START_OPEN) still show the state we left: Paused,
