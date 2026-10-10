@@ -100,6 +100,9 @@ void fmtDuration(char* out, size_t n, uint32_t seconds);
 /// YYYYMMDD -> "6.10." (day.month.); "--" for 0.
 void fmtDate(char* out, size_t n, uint32_t ymd);
 
+/// A shooting percentage: "56 %", or "--" with no attempts.
+void fmtPct(char* out, size_t n, uint16_t makes, uint16_t attempts);
+
 /// A workout step's goal, short: Attempts "x10", Makes "5 mk", Time "60 s"
 /// (@p type is score::GoalType; the faces have no multiplication sign).
 void fmtGoal(char* out, size_t n, uint8_t type, uint16_t value);

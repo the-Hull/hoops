@@ -185,7 +185,7 @@ bool gsStep1Start(const Model& m)
 bool gsStep1Mid(const Model& m)
 {
     const RingArcs r = ringArcs();
-    return workoutStep(m, 1, 4) && onScreenLabel("5 shots left") && m.snapshot().stepBits == 0x1Bu
+    return workoutStep(m, 1, 4) && onScreenLabel("5 shots left") && m.snapshot().stepBits() == 0x1Bu
         && r.look == Ring::Look::Segments && r.total == 10 && r.good == 4 && r.bad == 1 && r.line == 5;
 }
 bool gsStep1Last(const Model& m) { return workoutStep(m, 1, 4) && onScreenLabel("last shot!"); }
@@ -458,6 +458,10 @@ const Step kSteps[] = {
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  800, gsDone, "done mode: WORKOUT DONE (green), 26/40",
+                             '2', "Rest (done): DOWN -> pause, Pause" },
+    { 1000, onPause, "on Pause from the done summary",
+                             '3', "Pause: SELECT Resume" },
+    { 1000, gsDone, "resumed back into the done summary (Rest), not Active",
                              '1', "Rest (done): UP keep shooting -> Active" },
     {  800, activeDone, "Active: WORKOUT DONE header, extra shots",
                              '3', "Active: make (extra shot)" },
@@ -545,10 +549,10 @@ void logSnapshot()
     }
     const score::Snapshot& s = sModel->snapshot();
     LOG_INFO("snapshot: state %u mode %u spot %u spot %u/%u total %u/%u last5 %u:%02x t %lu s"
-             " step %u/%u %u/%u bits %lx rest %u flags %x\n",
+             " step %u/%u %u/%u bits %08lx%08lx rest %u flags %x\n",
              s.state, s.mode, s.spot, s.spotMakes, s.spotAttempts, s.totalMakes, s.totalAttempts,
              s.last5Count, s.last5Bits, static_cast<unsigned long>(s.elapsed_s), s.stepIndex + 1, s.stepCount,
-             s.stepMakes, s.stepAttempts, static_cast<unsigned long>(s.stepBits), s.restRemaining_s, s.flags);
+             s.stepMakes, s.stepAttempts, static_cast<unsigned long>(s.stepBitsHi), static_cast<unsigned long>(s.stepBitsLo), s.restRemaining_s, s.flags);
 }
 
 void logPool()

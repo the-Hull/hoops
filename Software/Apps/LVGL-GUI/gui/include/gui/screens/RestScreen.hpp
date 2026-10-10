@@ -78,6 +78,8 @@ private:
     bool     mEnding = false;   ///< END_SESSION sent (done mode)
     bool     mSaved  = false;   ///< SAVED arrived; Results on its way
     uint16_t mTotal  = 0;       ///< ring's full scale: the longest rest seen (grows with +15 s)
+    bool     mIgnorePaused = false;   ///< entered by a resume: Paused snapshots are stale...
+    bool     mLiveSeen     = false;   ///< ...until the first Active / Rest one
 };
 
 #endif // REST_SCREEN_HPP

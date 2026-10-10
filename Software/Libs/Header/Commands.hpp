@@ -259,6 +259,7 @@ static_assert(payloadIs<SaveWorkout>(sizeof(score::Workout) + 2), "implicit padd
 static_assert(payloadIs<DeleteWorkout>(4) && payloadIs<GetResults>(4), "implicit padding");
 static_assert(payloadIs<SnapshotMsg>(sizeof(score::Snapshot)) && payloadIs<UndoResult>(4), "implicit padding");
 static_assert(payloadIs<StepDone>(12), "implicit padding");
+static_assert(alignof(score::Snapshot) <= 4 && alignof(SnapshotMsg) <= 4, "message blocks are only 4-byte aligned");
 static_assert(payloadIs<WorkoutItem>(2 + sizeof(score::Workout)), "implicit padding");
 static_assert(payloadIs<Results>(12 + sizeof(score::SessionStats)), "implicit padding");
 static_assert(payloadIs<History>(4 + sizeof(score::SessionSummary) * score::kTrendCount), "implicit padding");

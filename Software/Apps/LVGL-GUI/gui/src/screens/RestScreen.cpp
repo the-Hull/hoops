@@ -68,6 +68,10 @@ void RestScreen::build()
 
 void RestScreen::onShow()
 {
+    // Entered from Pause on a running snapshot: Paused ones still on their
+    // way predate the resume, so they are ignored until a live one.
+    mIgnorePaused      = mModel.resumeEntry;
+    mModel.resumeEntry = false;
     mModel.requestSnapshot();
 }
 
@@ -170,11 +174,7 @@ void RestScreen::buildRest(const Info& in)
     // a shorter form, when it would not fit between the DOWN badge and the
     // ring.
     char pct[8];
-    if (in.attempts == 0) {
-        snprintf(pct, sizeof(pct), "--");
-    } else {
-        snprintf(pct, sizeof(pct), "%u %%", static_cast<unsigned>(score::pct(in.makes, in.attempts)));
-    }
+    Theme::fmtPct(pct, sizeof(pct), in.makes, in.attempts);
     char forms[2][40];
     snprintf(forms[0], sizeof(forms[0]), "Step %u done%s%u/%u%s", static_cast<unsigned>(in.stepIndex + 1),
              Theme::kMidDot, static_cast<unsigned>(in.makes), static_cast<unsigned>(in.attempts), Theme::kMidDot);
@@ -214,11 +214,7 @@ void RestScreen::buildDone()
     Theme::pair(mContent, Font::SemiBold60, makes, Theme::kText, Font::SemiBold40, ofTotal, Theme::kDim, kTotalY, 0);
 
     char pct[8];
-    if (s.totalAttempts == 0) {
-        snprintf(pct, sizeof(pct), "--");
-    } else {
-        snprintf(pct, sizeof(pct), "%u %%", static_cast<unsigned>(score::pct(s.totalMakes, s.totalAttempts)));
-    }
+    Theme::fmtPct(pct, sizeof(pct), s.totalMakes, s.totalAttempts);
     const uint32_t color = Theme::pctColor(s.totalMakes, s.totalAttempts);
     Theme::label(mContent, Font::SemiBold30, pct, 20, Theme::topFor(Font::SemiBold30, kPctY), 200,
                  LV_TEXT_ALIGN_CENTER, color);
@@ -301,9 +297,12 @@ void RestScreen::onSnapshot(const score::Snapshot& s)
         return;
     }
     if (st == score::SessionState::Paused) {
-        sm.goTo(ScreenId::Pause);
+        if (!(mIgnorePaused && !mLiveSeen)) {
+            sm.goTo(ScreenId::Pause);
+        }
         return;
     }
+    mLiveSeen = true;   // Active or Rest
     if (mDone) {
         // The service keeps the finished workout Active (for extra shots);
         // no shot can be logged from here, so the totals shown stand.

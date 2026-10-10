@@ -82,9 +82,14 @@ TEST(EngineWorkout, UndoCannotRemoveWorkoutCompletingShot) { SessionEngine e; e.
   bool m; EXPECT_FALSE(e.undo(m)); e.shot(true); EXPECT_TRUE(e.undo(m)); EXPECT_FALSE(e.undo(m)); }
 TEST(EngineWorkout, NextSpotShownWhilePausedInRest) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true);
   e.pause(); EXPECT_EQ(e.snapshot().nextSpot, (uint8_t)Spot::Top3); }
-TEST(EngineWorkout, StepBitsFollowStep) { SessionEngine e; e.startWorkout(two(), 1); EXPECT_EQ(e.snapshot().stepBits, 0u);
-  e.shot(true); e.shot(false); EXPECT_EQ(e.snapshot().stepBits, 0b1u); e.shot(true);
-  EXPECT_EQ(e.state(), SessionState::Rest); EXPECT_EQ(e.snapshot().stepBits, 0b101u);   // kept while resting
-  e.skipRest(); EXPECT_EQ(e.snapshot().stepBits, 0u); e.shot(false); e.shot(true); EXPECT_EQ(e.snapshot().stepBits, 0b10u); }
+TEST(EngineWorkout, StepBitsFollowStep) { SessionEngine e; e.startWorkout(two(), 1); EXPECT_EQ(e.snapshot().stepBits(), 0u);
+  e.shot(true); e.shot(false); EXPECT_EQ(e.snapshot().stepBits(), 0b1u); e.shot(true);
+  EXPECT_EQ(e.state(), SessionState::Rest); EXPECT_EQ(e.snapshot().stepBits(), 0b101u);   // kept while resting
+  e.skipRest(); EXPECT_EQ(e.snapshot().stepBits(), 0u); e.shot(false); e.shot(true); EXPECT_EQ(e.snapshot().stepBits(), 0b10u); }
 TEST(EngineWorkout, StepBitsClearedOnZeroRestAdvance) { Workout w = two(); w.steps[0].rest_s = 0; SessionEngine e; e.startWorkout(w, 1);
-  e.shot(true); e.shot(false); e.shot(true); EXPECT_EQ(e.snapshot().stepIndex, 1); EXPECT_EQ(e.snapshot().stepBits, 0u); }
+  e.shot(true); e.shot(false); e.shot(true); EXPECT_EQ(e.snapshot().stepIndex, 1); EXPECT_EQ(e.snapshot().stepBits(), 0u); }
+TEST(EngineWorkout, StepBitsHighHalf) { Workout w{}; w.stepCount = 1;
+  w.steps[0] = { (uint8_t)Spot::Ft, 0, { (uint8_t)GoalType::Attempts, 0, 50 } }; SessionEngine e; e.startWorkout(w, 1);
+  for (int i = 0; i < 40; ++i) e.shot(i == 0 || i == 33 || i == 39);
+  auto s = e.snapshot(); EXPECT_EQ(s.stepBitsLo, 0x1u); EXPECT_EQ(s.stepBitsHi, 0x82u);
+  EXPECT_EQ(s.stepBits(), (uint64_t{1} << 39) | (uint64_t{1} << 33) | 1u); }

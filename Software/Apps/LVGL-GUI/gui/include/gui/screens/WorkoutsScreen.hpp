@@ -42,8 +42,10 @@ private:
     static constexpr uint8_t kMaxItems = score::kPresetCount + score::kMaxUserWorkouts + 1;
     static constexpr uint8_t kLine2Len = 32;
 
-    /// Fill the items from the presets and the Model's user workouts.
-    void rebuildItems(uint16_t selected);
+    /// Fill the items from the presets and the Model's user workouts (the
+    /// caller hands them to the menu).
+    void fillItems();
+    void showItems(uint16_t selected);
     void select();
     void newWorkout();
 

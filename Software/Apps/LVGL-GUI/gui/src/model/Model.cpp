@@ -19,6 +19,11 @@
 #include "SDK/Messages/MessageGuard.hpp"
 #include "SDK/Port/LVGL/LvglPort.hpp"
 
+namespace
+{
+constexpr size_t kStepDonePayload = 12;   ///< CustomMessage::StepDone after its MessageBase
+} // namespace
+
 Model::Model()
     : mKernel(SDK::KernelProviderGUI::GetInstance().getKernel())
 {
@@ -43,12 +48,14 @@ void Model::bind(ModelListener* l)
 void Model::startOpen(uint8_t spot)
 {
     mHasStepDone = false;
+    resumeEntry  = false;
     SDK::send_msg<CustomMessage::StartOpen>(mKernel, spot);
 }
 
 void Model::startWorkout(uint8_t id)
 {
     mHasStepDone = false;
+    resumeEntry  = false;
     SDK::send_msg<CustomMessage::StartWorkout>(mKernel, id);
 }
 
@@ -204,17 +211,12 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
         } break;
 
         case CustomMessage::STEP_DONE: {
-            // Field by field: messages are not copyable (MessageBase).
-            auto* msg                = static_cast<CustomMessage::StepDone*>(message);
-            mStepDone.stepIndex      = msg->stepIndex;
-            mStepDone.workoutDone    = msg->workoutDone;
-            mStepDone.nextSpot       = msg->nextSpot;
-            mStepDone.nextGoalType   = msg->nextGoalType;
-            mStepDone.makes          = msg->makes;
-            mStepDone.attempts       = msg->attempts;
-            mStepDone.rest_s         = msg->rest_s;
-            mStepDone.nextGoalValue  = msg->nextGoalValue;
-            mHasStepDone             = true;
+            // Messages are not copyable (MessageBase): copy the payload, the
+            // bytes after the base, which payloadIs<> proves padding-free.
+            static_assert(CustomMessage::payloadIs<CustomMessage::StepDone>(kStepDonePayload), "StepDone payload");
+            memcpy(reinterpret_cast<uint8_t*>(&mStepDone) + sizeof(SDK::MessageBase),
+                   reinterpret_cast<const uint8_t*>(message) + sizeof(SDK::MessageBase), kStepDonePayload);
+            mHasStepDone = true;
             l->onStepDone(mStepDone);
         } break;
 

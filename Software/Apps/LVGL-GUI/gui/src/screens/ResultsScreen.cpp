@@ -97,11 +97,7 @@ void fmtMa(char* out, size_t n, const score::SpotStat& s)
 /// "56 %", or "--" with no attempts.
 void fmtPct(char* out, size_t n, const score::SpotStat& s)
 {
-    if (s.attempts == 0) {
-        snprintf(out, n, "--");
-    } else {
-        snprintf(out, n, "%u %%", static_cast<unsigned>(score::pct(s.makes, s.attempts)));
-    }
+    Theme::fmtPct(out, n, s.makes, s.attempts);
 }
 
 /// One bar of the trend: a session's percentage in the shown category.

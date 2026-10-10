@@ -8,6 +8,7 @@
 #include "gui/theme/Theme.hpp"
 #include "gui/Assets.hpp"
 
+#include "score/Stats.hpp"
 #include "score/Workout.hpp"
 
 #include <cstdio>
@@ -135,6 +136,15 @@ void fmtDate(char* out, size_t n, uint32_t ymd)
         return;
     }
     snprintf(out, n, "%u.%u.", static_cast<unsigned>(ymd % 100u), static_cast<unsigned>((ymd / 100u) % 100u));
+}
+
+void fmtPct(char* out, size_t n, uint16_t makes, uint16_t attempts)
+{
+    if (attempts == 0) {
+        snprintf(out, n, "--");
+    } else {
+        snprintf(out, n, "%u %%", static_cast<unsigned>(score::pct(makes, attempts)));
+    }
 }
 
 void fmtGoal(char* out, size_t n, uint8_t type, uint16_t value)

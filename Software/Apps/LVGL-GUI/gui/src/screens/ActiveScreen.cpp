@@ -123,6 +123,13 @@ void ActiveScreen::onShow()
     mLiveSeen   = false;
     mHasLeaving = st != score::SessionState::Active && st != score::SessionState::Rest;
     mLeaving    = st;
+    if (mModel.resumeEntry) {
+        // Entered from Pause on a running snapshot: a Paused one still on
+        // its way predates the resume.
+        mModel.resumeEntry = false;
+        mHasLeaving        = true;
+        mLeaving           = score::SessionState::Paused;
+    }
     if (mModel.hasSnapshot() && score::isRunning(st)) {
         rebuild(mModel.snapshot());
     }
@@ -246,7 +253,7 @@ void ActiveScreen::showWorkoutRing(const score::Snapshot& s)
         // One segment per shot of the step, coloured by the engine's bits.
         uint8_t states[Ring::kMaxSegments];
         for (uint8_t i = 0; i < s.goalValue; ++i) {
-            states[i] = i >= s.stepAttempts ? 0 : (((s.stepBits >> i) & 1u) ? 1 : 2);
+            states[i] = i >= s.stepAttempts ? 0 : (((s.stepBits() >> i) & 1u) ? 1 : 2);
         }
         mRing->setSegments(static_cast<uint8_t>(s.goalValue), states);
         return;
@@ -304,11 +311,7 @@ void ActiveScreen::showPct(uint16_t makes, uint16_t attempts, bool full)
         return;
     }
     char buf[8];
-    if (attempts == 0) {
-        snprintf(buf, sizeof(buf), "--");
-    } else {
-        snprintf(buf, sizeof(buf), "%u %%", static_cast<unsigned>(score::pct(makes, attempts)));
-    }
+    Theme::fmtPct(buf, sizeof(buf), makes, attempts);
     Theme::setText(mPct, buf);
     lv_obj_set_style_text_color(mPct, Theme::rgb(Theme::pctColor(makes, attempts)), LV_PART_MAIN);
 }

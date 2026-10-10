@@ -112,6 +112,11 @@ public:
     uint8_t workoutsIndex = 0, historyIndex = 0, resultsPage = 0;
     uint8_t selectedWorkoutId = 1;   ///< preview / start
 
+    /// Set by Pause when it routes to Rest / Active after the session runs
+    /// again; that screen then ignores Paused snapshots until a live one
+    /// (they predate the resume) and clears it.
+    bool resumeEntry = false;
+
     score::Workout& draft() { return mDraft; }
     uint8_t draftStep  = 0;
     bool    draftIsNew = true;

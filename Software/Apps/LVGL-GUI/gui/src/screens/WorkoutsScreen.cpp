@@ -33,7 +33,8 @@ void WorkoutsScreen::build()
     mMenu = std::make_unique<ListMenu>(mRoot, ListMenu::workoutsGeometry());
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Dot, Hints::Dot, Hints::Dot, Hints::Dot);
-    rebuildItems(mModel.workoutsIndex);
+    fillItems();
+    showItems(mModel.workoutsIndex);
 }
 
 void WorkoutsScreen::onShow()
@@ -48,7 +49,7 @@ void WorkoutsScreen::onHide()
     mModel.workoutsIndex = static_cast<uint8_t>(mMenu->selected());
 }
 
-void WorkoutsScreen::rebuildItems(uint16_t selected)
+void WorkoutsScreen::fillItems()
 {
     mCount = 0;
     auto add = [this](const score::Workout& w) {
@@ -67,7 +68,10 @@ void WorkoutsScreen::rebuildItems(uint16_t selected)
     mItems[mCount] = { "+ New workout", nullptr, Theme::kAccent };
     mIds[mCount]   = 0;
     ++mCount;
+}
 
+void WorkoutsScreen::showItems(uint16_t selected)
+{
     mMenu->setItems(mItems, mCount, selected < mCount ? selected : static_cast<uint16_t>(mCount - 1));
 }
 
@@ -117,14 +121,14 @@ void WorkoutsScreen::onWorkouts()
     // Keep the selected workout selected if it is still in the list.
     const uint8_t id = mIds[mMenu->selected()];
     uint16_t sel = mMenu->selected();
-    rebuildItems(0);
+    fillItems();
     for (uint8_t i = 0; i < mCount; ++i) {
         if (mIds[i] == id) {
             sel = i;
             break;
         }
     }
-    mMenu->setItems(mItems, mCount, sel < mCount ? sel : static_cast<uint16_t>(mCount - 1));
+    showItems(sel);
 }
 
 void WorkoutsScreen::onSuspend()

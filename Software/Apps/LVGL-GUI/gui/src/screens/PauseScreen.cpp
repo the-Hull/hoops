@@ -103,9 +103,8 @@ void PauseScreen::show(const score::Snapshot& s)
 
 void PauseScreen::resume()
 {
-    // Back to where the session was paused from, Active or Rest: the
-    // snapshot that answers RESUME says which (onSnapshot()).
-    mResuming = true;
+    // Back to where the session was paused from: the running snapshot that
+    // answers RESUME says where (onSnapshot()).
     mModel.resume();
 }
 
@@ -194,11 +193,16 @@ void PauseScreen::onSnapshot(const score::Snapshot& s)
     }
     if (st == score::SessionState::Paused) {
         mSeenPaused = true;
-    } else if ((mSeenPaused || mResuming) && !mEnding) {
-        // Active / Rest after Paused (or after our RESUME): the session runs
-        // again. Snapshots before the first Paused one predate our PAUSE and
-        // are only shown.
-        ScreenManager::instance().goTo(st == score::SessionState::Rest ? ScreenId::Rest : ScreenId::Active);
+    } else if (mSeenPaused && !mEnding) {
+        // Active / Rest after Paused (our RESUME, or a resume elsewhere): the
+        // session runs again. Running snapshots before the first Paused one
+        // predate our PAUSE and are only shown. Rest, and a finished workout
+        // (its done summary), return to the Rest screen; the rest to Active.
+        const bool doneSummary = mModel.hasStepDone() && mModel.lastStepDone().workoutDone
+            && (s.flags & score::Snapshot::kWorkoutDone);
+        mModel.resumeEntry = true;
+        ScreenManager::instance().goTo(st == score::SessionState::Rest || doneSummary ? ScreenId::Rest
+                                                                                     : ScreenId::Active);
         return;
     }
     show(s);

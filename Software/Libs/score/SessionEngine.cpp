@@ -245,8 +245,11 @@ Snapshot SessionEngine::snapshot() const
     s.totalAttempts = n;
     s.stepAttempts  = n > mSession.stepStartCount ? n - mSession.stepStartCount : 0;
     s.stepMakes     = stepMakes();
+    uint64_t bits = 0;
     for (uint16_t i = mSession.stepStartCount, b = 0; i < n && b < 64; ++i, ++b)
-        if (mSession.shots[i].made) s.stepBits |= uint64_t{1} << b;
+        if (mSession.shots[i].made) bits |= uint64_t{1} << b;
+    s.stepBitsLo = static_cast<uint32_t>(bits);
+    s.stepBitsHi = static_cast<uint32_t>(bits >> 32);
 
     for (uint16_t i = 0; i < 5 && i < n; ++i) {
         if (mSession.shots[n - 1 - i].made) s.last5Bits |= static_cast<uint8_t>(1u << i);
