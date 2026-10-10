@@ -16,6 +16,8 @@
 
 #include "lvgl.h"
 
+#include "SDK/Port/LVGL/LvglPort.hpp"
+
 #include "score/History.hpp"
 #include "score/Serializer.hpp"
 
@@ -42,6 +44,7 @@ struct Step {
     char        key;       ///< SDK::GUI::Button code then sent; 0 = none
     const char* note;
     void      (*after)() = nullptr;   ///< runs last, e.g. the phase-1 crash
+    const char* shot = nullptr;       ///< HOOPS_SHOTS_DIR: <dir>/<shot>.ppm of the frame after the key
 };
 
 bool onScreen(ScreenId id) { return ScreenManager::instance().current() == id; }
@@ -585,6 +588,158 @@ bool workoutsAfterDiscard(const Model& m)
     return onWorkouts(m) && m.userWorkoutCount() == 0 && !onScreenLabel("Game Shots 2");
 }
 
+// --- Settings, streak, open target, clear history --------------------------------
+
+/// Software/Output/<name> exists (the binary runs from simulator/build/bin).
+bool outputFileExists(const char* name)
+{
+    char path[96];
+    snprintf(path, sizeof(path), "../../../../../Output/%s", name);
+    FILE* f = fopen(path, "rb");
+    if (f) {
+        fclose(f);
+    }
+    LOG_INFO("%s: %s\n", name, f ? "present" : "absent");
+    return f != nullptr;
+}
+bool sessionFileExists(uint32_t id, const char* ext)
+{
+    char name[40];
+    snprintf(name, sizeof(name), "sessions/%lu.%s", static_cast<unsigned long>(id), ext);
+    return outputFileExists(name);
+}
+bool csvExists(uint32_t id) { return sessionFileExists(id, "csv"); }
+
+constexpr uint8_t u8(score::GoalType v) { return static_cast<uint8_t>(v); }
+constexpr uint8_t u8(score::Haptics v)  { return static_cast<uint8_t>(v); }
+constexpr uint8_t u8(score::Scheme v)   { return static_cast<uint8_t>(v); }
+constexpr uint8_t u8(score::HoldDown v) { return static_cast<uint8_t>(v); }
+
+bool onSettings() { return onScreen(ScreenId::Settings) && onScreenLabel("SETTINGS"); }
+/// Settings with @p row selected, showing @p value (both drawn in the pill).
+bool settingsRow(const char* row, const char* value)
+{
+    return onSettings() && menuSelected(row) && menuSelected(value);
+}
+bool settingsAtDefaults(const Model& m)
+{
+    const score::Settings d = score::Settings::defaults();
+    return memcmp(&m.settings(), &d, sizeof(d)) == 0;
+}
+
+bool stEntered(const Model&) { return onSettings() && menuSelected("Goal type"); }
+bool stGoalMakes(const Model& m)
+{
+    return settingsRow("Goal type", "Makes") && m.settings().goalType == u8(score::GoalType::Makes);
+}
+// Attempts -> Makes -> Time (value snapped to 30 s) -> Attempts (30 shots).
+bool stGoalAttempts(const Model& m)
+{
+    return settingsRow("Goal type", "Attempts") && m.settings().goalType == u8(score::GoalType::Attempts)
+        && m.settings().goalValue == 30;
+}
+bool stValue30(const Model& m) { return settingsRow("Goal value", "30 shots") && m.settings().goalValue == 30; }
+bool stValue10(const Model& m)
+{
+    return settingsRow("Goal value", "10 shots") && m.settings().goalValue == 10 && settingsAtDefaults(m);
+}
+bool stHapticsOff(const Model& m)
+{
+    return settingsRow("Haptics", "Off") && m.settings().haptics == u8(score::Haptics::Off);
+}
+bool stHapticsStrong(const Model& m)
+{
+    return settingsRow("Haptics", "Strong") && m.settings().haptics == u8(score::Haptics::Strong)
+        && settingsAtDefaults(m);
+}
+// The scheme switch rebuilds the screen in the Light palette, on the same row.
+bool stLight(const Model& m)
+{
+    LOG_INFO("scheme %u, kBg %06lx\n", m.settings().scheme, static_cast<unsigned long>(Theme::kBg));
+    return Theme::kBg == SDK::GUI::Color::WHITE && settingsRow("Colour scheme", "Light")
+        && m.settings().scheme == u8(score::Scheme::Light);
+}
+bool homeLight(const Model& m) { return onHome(m) && Theme::kBg == SDK::GUI::Color::WHITE; }
+bool stDark(const Model& m)
+{
+    return Theme::kBg == SDK::GUI::Color::BLACK && settingsRow("Colour scheme", "Dark")
+        && m.settings().scheme == u8(score::Scheme::Dark) && settingsAtDefaults(m);
+}
+
+/// The newest saved session before Clear history (its .bin and .csv must go).
+uint32_t sClearedId = 0;
+bool stClearRow(const Model& m)
+{
+    if (!m.hasHistory() || m.historyCount() == 0) {
+        return false;
+    }
+    sClearedId = m.historyItem(0).id;
+    LOG_INFO("clear history: %u sessions, newest id %lu\n", static_cast<unsigned>(m.historyTotal()),
+             static_cast<unsigned long>(sClearedId));
+    return onSettings() && menuSelected("Clear history") && onScreenLabel("sessions", 0, true)
+        && m.historyTotal() > 1 && csvExists(sClearedId) && sessionFileExists(sClearedId, "bin");
+}
+bool stClearConfirm(const Model& m)
+{
+    return onSettings() && onScreenLabel("SELECT again to confirm") && m.historyTotal() > 0;
+}
+bool stCleared(const Model& m)
+{
+    return onSettings() && visibleLabel("History cleared") && m.historyTotal() == 0 && menuSelected("0 sessions")
+        && sClearedId != 0 && !csvExists(sClearedId) && !sessionFileExists(sClearedId, "bin");
+}
+
+bool stTarget25(const Model& m) { return settingsRow("Open target", "25 shots") && m.settings().openTarget == 25; }
+bool streak5(const Model& m)
+{
+    return onScreen(ScreenId::Active) && m.hasSnapshot() && visibleLabel("5 in a row!") && m.snapshot().streak == 5
+        && m.snapshot().totalMakes == 5 && m.snapshot().totalAttempts == 5;
+}
+bool targetReached(const Model& m)
+{
+    return onScreen(ScreenId::Active) && m.hasSnapshot() && visibleLabel("Target reached")
+        && m.snapshot().totalAttempts == 25;
+}
+bool stTargetOff(const Model& m) { return settingsRow("Open target", "Off") && m.settings().openTarget == 0; }
+bool stHoldPause(const Model& m)
+{
+    return settingsRow("Hold DOWN", "Pause") && m.settings().holdDown == u8(score::HoldDown::Pause);
+}
+bool onActiveOpen(const Model& m)
+{
+    return onScreen(ScreenId::Active) && m.hasSnapshot() && m.snapshot().mode == score::Snapshot::kModeOpen;
+}
+// Hold DOWN = Pause: DOWN held past 500 ms shows no change-spot hint.
+bool holdNoHint(const Model& m) { return onActiveOpen(m) && !visibleLabel("Release to change spot"); }
+bool holdPaused(const Model& m)
+{
+    return onPause(m) && m.hasSnapshot() && m.snapshot().state == static_cast<uint8_t>(score::SessionState::Paused)
+        && !visibleLabel("Release to change spot");
+}
+bool stHoldChangeSpot(const Model& m)
+{
+    return settingsRow("Hold DOWN", "Change spot") && m.settings().holdDown == u8(score::HoldDown::ChangeSpot)
+        && settingsAtDefaults(m);
+}
+/// settings.bin holds the defaults: header + the 12-byte Settings.
+bool settingsFileAtDefaults()
+{
+    if (!outputFileExists("settings.bin")) {
+        return false;
+    }
+    FILE* f = fopen("../../../../../Output/settings.bin", "rb");
+    uint8_t buf[sizeof(score::ser::Header) + sizeof(score::Settings) + 1] = {};
+    const size_t n = f ? fread(buf, 1, sizeof(buf), f) : 0;
+    if (f) {
+        fclose(f);
+    }
+    const score::Settings d = score::Settings::defaults();
+    LOG_INFO("settings.bin: %u B\n", static_cast<unsigned>(n));
+    return n == sizeof(score::ser::Header) + sizeof(score::Settings)
+        && memcmp(buf + sizeof(score::ser::Header), &d, sizeof(d)) == 0;
+}
+bool finalHome(const Model& m) { return onHome(m) && settingsAtDefaults(m) && settingsFileAtDefaults(); }
+
 // Three sessions: the first is played, changes spot (hold DOWN, navigation
 // on the release), pauses, resumes and is saved (Results); the second is
 // discarded through the double SELECT; the third covers three spots and is
@@ -655,14 +810,14 @@ const Step kSteps[] = {
     { 1000, emptyNotSaved, "empty session not saved: Home, toast Nothing to save",
                              '3', "Home: SELECT Open Session -> SpotPicker" },
     // Session 3: three spots in three categories, a 3-make streak, End & save.
-    {  500, nullptr, nullptr, '1', "SpotPicker: UP (3PT L-Wing, footer logged)", &logPickerFooter },
+    {  500, nullptr, nullptr, '1', "SpotPicker: UP (3PT L-Wing, footer logged)", &logPickerFooter, "spot-picker" },
     {  400, nullptr, nullptr, '2', "SpotPicker: DOWN (3PT Top, footer logged)", &logPickerFooter },
     {  400, nullptr, nullptr, '3', "SpotPicker: SELECT (3PT Top) -> Active" },
     { 1200, nullptr, nullptr, '3', "Active: make" },
     {  400, nullptr, nullptr, '3', "Active: make" },
     {  400, nullptr, nullptr, '3', "Active: make" },
     {  400, nullptr, nullptr, '4', "Active: miss" },
-    {  400, nullptr, nullptr, '4', "Active: miss" },
+    {  400, nullptr, nullptr, '4', "Active: miss (last-5 dots: M M M X X)", nullptr, "active-open" },
     {  600, nullptr, nullptr, 'w', "Active: DOWN press" },
     {  600, nullptr, nullptr, 's', "Active: DOWN release -> SpotPicker" },
     {  600, nullptr, nullptr, '2', "SpotPicker: DOWN" },
@@ -681,7 +836,7 @@ const Step kSteps[] = {
     {  400, nullptr, nullptr, '3', "SpotPicker: SELECT -> changeSpot, Active" },
     {  800, nullptr, nullptr, '4', "Active: miss" },
     {  400, nullptr, nullptr, '3', "Active: make" },
-    {  600, nullptr, nullptr, '2', "Active: DOWN -> pause, Pause" },
+    {  600, nullptr, nullptr, '2', "Active: DOWN -> pause, Pause", nullptr, "pause" },
     {  800, nullptr, nullptr, '2', "Pause: DOWN -> End & save" },
     {  500, nullptr, nullptr, '3', "Pause: SELECT End & save -> Results" },
     { 1500, resultsCaption, "Results page 1: total 5/9 - 56 %, caption 3PT - Top 3/5 - 60 %",
@@ -691,19 +846,19 @@ const Step kSteps[] = {
     {  500, resultsPage2, "Results page 2: 3PT 3/5, footer Top 3/5",
                              '2', "Results 2: DOWN (Mid-range)" },
     {  500, nullptr, nullptr, '1', "Results 2: UP (3PT)" },
-    {  500, nullptr, nullptr, '3', "Results 2: SELECT -> page 3" },
+    {  500, nullptr, nullptr, '3', "Results 2: SELECT -> page 3", nullptr, "results-highlights" },
     {  500, resultsPage3, "Results page 3: STREAK 3 in a row - Top",
-                             '3', "Results 3: SELECT -> page 4" },
+                             '3', "Results 3: SELECT -> page 4", nullptr, "results-trend" },
     {  500, resultsPage4, "Results page 4: trend",
                              '1', "Results 4: UP" },
     {  500, nullptr, nullptr, '2', "Results 4: DOWN" },
     {  500, nullptr, nullptr, '3', "Results 4: SELECT -> page 1" },
     {  500, resultsPage1, "Results wrapped to page 1",
-                             '4', "Results: BACK -> Home" },
+                             '4', "Results: BACK -> Home", nullptr, "home" },
     { 1000, onHome, "on Home after Results",
                              '2', "Home: DOWN (Workouts)" },
     {  400, nullptr, nullptr, '2', "Home: DOWN (History)" },
-    {  400, nullptr, nullptr, '3', "Home: SELECT -> History" },
+    {  400, nullptr, nullptr, '3', "Home: SELECT -> History", nullptr, "history" },
     { 1000, historyLists, "History lists the saved session",
                              '3', "History: SELECT -> Results of that session" },
     { 1500, resultsFromHistory, "Results page 1 of the session opened from History",
@@ -717,9 +872,9 @@ const Step kSteps[] = {
                              '2', "Workouts: DOWN" },
     {  300, nullptr, nullptr, '2', "Workouts: DOWN" },
     {  300, nullptr, nullptr, '2', "Workouts: DOWN" },
-    {  300, nullptr, nullptr, '2', "Workouts: DOWN (Game Shots)" },
+    {  300, nullptr, nullptr, '2', "Workouts: DOWN (Game Shots)", nullptr, "workouts" },
     {  400, workoutsOnGameShots, "Workouts: Game Shots, 4 steps - 40 shots",
-                             '3', "Workouts: SELECT -> Preview" },
+                             '3', "Workouts: SELECT -> Preview", nullptr, "workout-preview" },
     {  800, previewGameShots, "Preview: GAME SHOTS, rest 30 s, about 10 min",
                              '3', "Preview: SELECT START -> Active (workout)" },
     { 1200, gsStep1Start, "Active workout: STEP 1 / 4, 10 grey segments",
@@ -727,14 +882,14 @@ const Step kSteps[] = {
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
-    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make", nullptr, "active-workout" },
     {  500, gsStep1Mid, "segments: 4 green, 1 red, 5 grey (stepBits 0x1B)",
                              '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  500, gsStep1Last, "one shot left: last shot!",
-                             '3', "Active: make (10th: step done)" },
+                             '3', "Active: make (10th: step done)", nullptr, "rest" },
     {  800, gsRest1, "Rest header REST (amber), NEXT - STEP 2 / 4, Step 1 (done) - 7/10 - 70 %",
                              '1', "Rest: UP +15 s" },
     {  800, restExtended, "countdown after +15 s >= 0:40",
@@ -791,9 +946,9 @@ const Step kSteps[] = {
     {  600, extraShot, "extra shot counted: total 41",
                              '2', "Active: DOWN -> pause, Pause" },
     {  800, nullptr, nullptr, '2', "Pause: DOWN -> End & save" },
-    {  500, nullptr, nullptr, '3', "Pause: SELECT End & save -> Results" },
+    {  500, nullptr, nullptr, '3', "Pause: SELECT End & save -> Results", nullptr, "results-court" },
     { 1500, onResults, "on Results after the workout",
-                             '3', "Results 1: SELECT -> page 2" },
+                             '3', "Results 1: SELECT -> page 2", nullptr, "results-categories" },
     {  600, gsResultsCats, "Results page 2: 4 categories, attempts 10/10/10/11",
                              '4', "Results: BACK -> Home" },
     // Mid-range Ladder: Makes goals, a progress ring.
@@ -862,7 +1017,7 @@ const Step kSteps[] = {
     // preset duplicated and dropped.
     { 1000, nullptr, nullptr, '1', "Workouts: UP" },
     {  300, nullptr, nullptr, '1', "Workouts: UP (wraps to + New workout)" },
-    {  400, nullptr, nullptr, '3', "Workouts: SELECT + New workout -> StepBuilder" },
+    {  400, nullptr, nullptr, '3', "Workouts: SELECT + New workout -> StepBuilder", nullptr, "step-builder" },
     {  800, sbNew, "StepBuilder: NEW STEP 1, Custom 1, Free Throw x10, rest 30 s",
                              '1', "StepBuilder Spot: UP" },
     {  300, nullptr, nullptr, '1', "StepBuilder Spot: UP (Layup - R)" },
@@ -954,21 +1109,152 @@ const Step kSteps[] = {
     {  800, workoutsAfterDiscard, "Workouts after the discard: nothing saved",
                              '4', "Workouts: BACK -> Home" },
     { 1000, onHome, "on Home after the step builder",
+                             '1', "Home: UP (Open Session)" },
+    // Settings: rows cycle and the SETTINGS echo matches; Light scheme; all
+    // back to the defaults, so settings.bin ends as a fresh start would be.
+    {  400, nullptr, nullptr, '2', "Home: DOWN (Workouts)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (History)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (Settings)" },
+    {  300, nullptr, nullptr, '3', "Home: SELECT -> Settings" },
+    {  800, stEntered, "Settings: Goal type selected",
+                             '3', "Settings: SELECT Goal type -> Makes" },
+    {  400, stGoalMakes, "Goal type Makes (SETTINGS echo)",
+                             '3', "Settings: SELECT Goal type -> Time" },
+    {  400, nullptr, nullptr, '3', "Settings: SELECT Goal type -> Attempts" },
+    {  400, stGoalAttempts, "Goal type back to Attempts, value snapped via Time to 30",
+                             '2', "Settings: DOWN (Goal value)" },
+    {  400, stValue30, "Goal value 30 shots",
+                             '3', "Settings: SELECT Goal value -> 40" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Goal value -> 50" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Goal value -> 5" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Goal value -> 10" },
+    {  400, stValue10, "Goal value back to 10 shots: defaults again",
+                             '2', "Settings: DOWN (Rest)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Open target)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Hold DOWN)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Haptics)" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Haptics -> Off" },
+    {  400, stHapticsOff, "Haptics Off (SETTINGS echo)",
+                             '3', "Settings: SELECT Haptics -> Light" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Haptics -> Strong" },
+    {  400, stHapticsStrong, "Haptics back to Strong",
+                             '2', "Settings: DOWN (Backlight on shot)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Heart rate)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Colour scheme)", nullptr, "settings" },
+    {  400, nullptr, nullptr, '3', "Settings: SELECT Colour scheme -> Light (rebuild)" },
+    {  800, stLight, "Light scheme: kBg WHITE, Settings rebuilt on Colour scheme",
+                             '4', "Settings: BACK -> Home (Light)" },
+    {  800, homeLight, "Home in the Light scheme",
+                             '1', "Home: UP (History)" },
+    {  300, nullptr, nullptr, '1', "Home: UP (Workouts)" },
+    {  300, nullptr, nullptr, '1', "Home: UP (Open Session)", nullptr, "home-light" },
+    {  400, nullptr, nullptr, '2', "Home: DOWN (Workouts)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (History)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (Settings)" },
+    {  300, nullptr, nullptr, '3', "Home: SELECT -> Settings" },
+    {  800, stLight, "Settings again: the selection memory is on Colour scheme (Light)",
+                             '3', "Settings: SELECT Colour scheme -> Dark (rebuild)" },
+    {  800, stDark, "Dark scheme again: kBg BLACK, defaults",
+                             '2', "Settings: DOWN (CSV export)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Clear history)" },
+    // Clear history: confirm flow; the sessions' files and CSVs go.
+    {  600, stClearRow, "Clear history: N sessions; the newest session's .bin and .csv exist",
+                             '3', "Settings: SELECT Clear history -> confirm" },
+    {  400, stClearConfirm, "Clear history: SELECT again to confirm",
+                             '3', "Settings: SELECT again -> CLEAR_HISTORY" },
+    {  800, stCleared, "History cleared: toast, 0 sessions, the newest session's .bin and .csv gone",
+                             '2', "Settings: DOWN (About)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Goal type)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Goal value)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Rest)" },
+    {  300, nullptr, nullptr, '2', "Settings: DOWN (Open target)" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Open target -> 25 shots" },
+    // Open target 25 and the streak toast.
+    {  400, stTarget25, "Open target 25 shots (SETTINGS echo)",
+                             '4', "Settings: BACK -> Home" },
+    {  800, nullptr, nullptr, '1', "Home: UP (History)" },
+    {  300, nullptr, nullptr, '1', "Home: UP (Workouts)" },
+    {  300, nullptr, nullptr, '1', "Home: UP (Open Session)" },
+    {  300, nullptr, nullptr, '3', "Home: SELECT Open Session -> SpotPicker" },
+    {  500, nullptr, nullptr, '3', "SpotPicker: SELECT -> startOpen, Active" },
+    { 1200, nullptr, nullptr, '3', "Active: make 1" },
+    {  300, nullptr, nullptr, '3', "Active: make 2" },
+    {  300, nullptr, nullptr, '3', "Active: make 3" },
+    {  300, nullptr, nullptr, '3', "Active: make 4" },
+    {  300, nullptr, nullptr, '3', "Active: make 5 (streak 5)" },
+    {  400, streak5, "fifth make in a row: toast 5 in a row!, snapshot streak 5",
+                             '4', "Active: miss 6" },
+    {  300, nullptr, nullptr, '3', "Active: make 7" },
+    {  300, nullptr, nullptr, '3', "Active: make 8" },
+    {  300, nullptr, nullptr, '3', "Active: make 9" },
+    {  300, nullptr, nullptr, '3', "Active: make 10" },
+    {  300, nullptr, nullptr, '3', "Active: make 11" },
+    {  300, nullptr, nullptr, '3', "Active: make 12" },
+    {  300, nullptr, nullptr, '3', "Active: make 13" },
+    {  300, nullptr, nullptr, '3', "Active: make 14" },
+    {  300, nullptr, nullptr, '3', "Active: make 15" },
+    {  300, nullptr, nullptr, '3', "Active: make 16 (streak 10)" },
+    {  300, nullptr, nullptr, '3', "Active: make 17" },
+    {  300, nullptr, nullptr, '3', "Active: make 18" },
+    {  300, nullptr, nullptr, '3', "Active: make 19" },
+    {  300, nullptr, nullptr, '3', "Active: make 20" },
+    {  300, nullptr, nullptr, '3', "Active: make 21" },
+    {  300, nullptr, nullptr, '3', "Active: make 22" },
+    {  300, nullptr, nullptr, '3', "Active: make 23" },
+    {  300, nullptr, nullptr, '3', "Active: make 24" },
+    {  300, nullptr, nullptr, '4', "Active: miss 25 (target)" },
+    {  400, targetReached, "25th shot: toast Target reached",
+                             '2', "Active: DOWN -> pause, Pause" },
+    {  800, nullptr, nullptr, '2', "Pause: DOWN" },
+    {  400, nullptr, nullptr, '2', "Pause: DOWN -> Discard" },
+    {  400, nullptr, nullptr, '3', "Pause: SELECT Discard -> confirm" },
+    {  400, nullptr, nullptr, '3', "Pause: SELECT -> discard, Home" },
+    // Open target back to Off; Hold DOWN = Pause pauses on the hold.
+    { 1500, onHome, "on Home after the target session",
+                             '2', "Home: DOWN (Workouts)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (History)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (Settings)" },
+    {  300, nullptr, nullptr, '3', "Home: SELECT -> Settings" },
+    {  800, stTarget25, "Settings again on Open target, 25 shots",
+                             '3', "Settings: SELECT Open target -> 50 shots" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Open target -> 100 shots" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Open target -> 200 shots" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Open target -> Off" },
+    {  400, stTargetOff, "Open target Off",
+                             '2', "Settings: DOWN (Hold DOWN)" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Hold DOWN -> Pause" },
+    {  400, stHoldPause, "Hold DOWN Pause (SETTINGS echo)",
+                             '4', "Settings: BACK -> Home" },
+    {  800, nullptr, nullptr, '1', "Home: UP (History)" },
+    {  300, nullptr, nullptr, '1', "Home: UP (Workouts)" },
+    {  300, nullptr, nullptr, '1', "Home: UP (Open Session)" },
+    {  300, nullptr, nullptr, '3', "Home: SELECT Open Session -> SpotPicker" },
+    {  500, nullptr, nullptr, '3', "SpotPicker: SELECT -> startOpen, Active" },
+    { 1200, onActiveOpen, "open session on Active",
+                             'w', "Active: DOWN press" },
+    {  600, holdNoHint, "Hold DOWN = Pause: held 600 ms, no Release to change spot",
+                             's', "Active: DOWN release after the hold -> pause, Pause" },
+    {  800, holdPaused, "the hold paused: Pause screen, session Paused",
+                             '2', "Pause: DOWN" },
+    {  400, nullptr, nullptr, '2', "Pause: DOWN -> Discard" },
+    {  400, nullptr, nullptr, '3', "Pause: SELECT Discard -> confirm" },
+    {  400, nullptr, nullptr, '3', "Pause: SELECT -> discard, Home" },
+    { 1500, onHome, "on Home after the hold-pause session",
+                             '2', "Home: DOWN (Workouts)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (History)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (Settings)" },
+    {  300, nullptr, nullptr, '3', "Home: SELECT -> Settings (on Hold DOWN)" },
+    {  800, nullptr, nullptr, '3', "Settings: SELECT Hold DOWN -> Change spot" },
+    {  400, stHoldChangeSpot, "Hold DOWN back to Change spot: every setting at its default",
+                             '4', "Settings: BACK -> Home" },
+    { 1000, finalHome, "on Home, settings at defaults, settings.bin written with the defaults",
                              '4', "Home: BACK -> exit app" },
 };
 
 // --- Crash resume (HOOPS_SELFTEST_PHASE=1, then =2) -------------------------------
 
 /// The simulator's file system root is Software/Output (see workoutsFileSize()).
-bool currentFileExists()
-{
-    FILE* f = fopen("../../../../../Output/current.bin", "rb");
-    if (f) {
-        fclose(f);
-    }
-    LOG_INFO("current.bin: %s\n", f ? "present" : "absent");
-    return f != nullptr;
-}
+bool currentFileExists() { return outputFileExists("current.bin"); }
 
 bool openCounts(const Model& m, uint16_t makes, uint16_t attempts)
 {
@@ -1110,8 +1396,47 @@ void logPool()
              static_cast<unsigned>(ScreenManager::instance().current()), static_cast<unsigned>(sModel->resultsPage));
 }
 
+/// HOOPS_SHOTS_DIR set: the frame the kernel last got, as <dir>/<name>.ppm
+/// (binary PPM, ABGR2222 decoded as the simulator window does: 2-bit
+/// channels x 85, R in bits 0-1, G 2-3, B 4-5).
+const char* sShotsDir    = nullptr;
+const char* sPendingShot = nullptr;
+
+void writeShot(const char* name)
+{
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s.ppm", sShotsDir, name);
+    FILE* f = fopen(path, "wb");
+    if (!f) {
+        LOG_INFO("shot %s: cannot open %s\n", name, path);
+        return;
+    }
+    constexpr int32_t kW = SDK::LVGL::kDisplayWidth;
+    constexpr int32_t kH = SDK::LVGL::kDisplayHeight;
+    fprintf(f, "P6 %ld %ld 255\n", static_cast<long>(kW), static_cast<long>(kH));
+    const uint8_t* px = SDK::LVGL::Port::GetInstance().frame();
+    uint8_t row[kW * 3];
+    for (int32_t y = 0; y < kH; ++y) {
+        for (int32_t x = 0; x < kW; ++x) {
+            const uint8_t p = *px++;
+            row[x * 3 + 0] = static_cast<uint8_t>((p & 0x03) * 85);
+            row[x * 3 + 1] = static_cast<uint8_t>(((p >> 2) & 0x03) * 85);
+            row[x * 3 + 2] = static_cast<uint8_t>(((p >> 4) & 0x03) * 85);
+        }
+        fwrite(row, 1, sizeof(row), f);
+    }
+    fclose(f);
+    LOG_INFO("shot %s: %s (frame %lu)\n", name, path,
+             static_cast<unsigned long>(SDK::LVGL::Port::GetInstance().frameCount()));
+}
+
 void tick(lv_timer_t* t)
 {
+    // The previous step's key has rendered by now: take its shot first.
+    if (sPendingShot) {
+        writeShot(sPendingShot);
+        sPendingShot = nullptr;
+    }
     logSnapshot();
     logPool();
     const Step& step = sSteps[sIndex++];
@@ -1131,6 +1456,9 @@ void tick(lv_timer_t* t)
     if (step.key != 0) {
         uint32_t key = static_cast<uint32_t>(step.key);
         lv_obj_send_event(lv_screen_active(), LV_EVENT_KEY, &key);
+    }
+    if (sShotsDir && step.shot) {
+        sPendingShot = step.shot;
     }
     if (sIndex < sCount) {
         lv_timer_set_period(t, sSteps[sIndex].delayMs);
@@ -1157,7 +1485,12 @@ void startSelfTest(Model& model)
         sSteps = kPhase2;
         sCount = sizeof(kPhase2) / sizeof(kPhase2[0]);
     }
-    LOG_INFO("self-test: %s, %lu steps\n", phase ? phase : "full", static_cast<unsigned long>(sCount));
+    // HOOPS_SHOTS_DIR: an existing directory (absolute: the cwd is build/bin)
+    // for the steps' screenshots.
+    const char* shots = getenv("HOOPS_SHOTS_DIR");
+    sShotsDir = shots && shots[0] ? shots : nullptr;
+    LOG_INFO("self-test: %s, %lu steps%s%s\n", phase ? phase : "full", static_cast<unsigned long>(sCount),
+             sShotsDir ? ", shots to " : "", sShotsDir ? sShotsDir : "");
     lv_timer_create(&tick, sSteps[0].delayMs, nullptr);
 }
 

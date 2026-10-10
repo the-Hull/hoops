@@ -88,9 +88,14 @@ arm-none-eabi-size build/HoopsGUI.elf build/HoopsService.elf
 ```bash
 cd Software/Apps/LVGL-GUI/simulator
 cmake -S . -B build-selftest -G Ninja -DCMAKE_CXX_FLAGS=-DHOOPS_SELFTEST=1 && cmake --build build-selftest
-rm -f ../../../Output/workouts.bin ../../../Output/current.bin    # fresh store, no session in progress
+rm -f ../../../Output/workouts.bin ../../../Output/current.bin ../../../Output/settings.bin   # fresh store/settings
 (cd build/bin && SDL_VIDEODRIVER=dummy timeout 400 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
-#   full walk: "done: 90 checks passed, 0 failed"
+#   full walk: "done: 117 checks passed, 0 failed" (ends with Settings and settings.bin back at the defaults)
+# Store screenshots: with HOOPS_SHOTS_DIR (an existing dir, absolute path: the cwd is build/bin) the walk
+# writes 16 frames as <name>.ppm (240x240, spec §8); tools/ppm2png.py makes the 480x480 PNGs.
+SHOTS=$(realpath ../../../..)/shots && mkdir -p $SHOTS     # shots/ is git-ignored
+(cd build/bin && HOOPS_SHOTS_DIR=$SHOTS SDL_VIDEODRIVER=dummy timeout 400 stdbuf -oL ./HoopsSimulator | grep -E "done:")
+../../../../.venv/bin/python3 ../../../../tools/ppm2png.py $SHOTS ../../../../docs/store/previews
 # Crash resume: phase 1 starts an open session, 5 shots (3 makes), then exits without ending it
 # (kill -9 it after "phase 1 ready" for a real crash); phase 2 restarts, checks that neither an open
 # session nor a workout can start while it is in progress (toasts), then Resume -> Pause 3/5 (9 checks).
