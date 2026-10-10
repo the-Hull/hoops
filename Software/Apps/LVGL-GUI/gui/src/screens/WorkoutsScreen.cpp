@@ -12,6 +12,7 @@
 #include "score/Spots.hpp"
 
 #include "gui/screens/ScreenManager.hpp"
+#include "gui/screens/StepValues.hpp"
 #include "gui/theme/Theme.hpp"
 
 namespace
@@ -77,13 +78,12 @@ void WorkoutsScreen::showItems(uint16_t selected)
 
 void WorkoutsScreen::newWorkout()
 {
-    // A one-step draft: Free Throw, 10 attempts, 30 s rest.
+    // A one-step draft: Free Throw with the Settings' goal and rest.
     score::Workout& d = mModel.draft();
     d = score::Workout {};
     snprintf(d.name, sizeof(d.name), "Custom %u", static_cast<unsigned>(mModel.userWorkoutCount() + 1));
     d.stepCount = 1;
-    d.steps[0]  = { static_cast<uint8_t>(score::Spot::Ft), 30,
-                    { static_cast<uint8_t>(score::GoalType::Attempts), 0, 10 } };
+    d.steps[0]  = StepValues::defaultStep(mModel.settings());
     mModel.draftStep  = 0;
     mModel.draftField = 0;
     mModel.draftIsNew = true;
