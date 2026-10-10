@@ -26,7 +26,7 @@ Model::Model()
     SDK::LVGL::Port::GetInstance().setCustomMessageHandler(this);
 
 #if defined(SIMULATOR)
-    LOG_INFO("Keys: 1 = UP, 2 = DOWN, 3 = SELECT, 4 = BACK (hold > 0.7 s = long press), Esc = close\n");
+    LOG_INFO("Keys: 1 = UP, 2 = DOWN, 3 = SELECT, 4 = BACK (hold >= 0.5 s = long press), Esc = close\n");
 #endif
 }
 

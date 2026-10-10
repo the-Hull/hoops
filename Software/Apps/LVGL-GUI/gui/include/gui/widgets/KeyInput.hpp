@@ -13,8 +13,8 @@
  *   fires, {Hold, btn} is delivered through the Callback given to the
  *   constructor (feed() has long returned by then). A Hold suppresses the
  *   Click that might follow for the same button.
- * - A RELEASE stops the timer. Releases between 500 ms and kHoldMs produce
- *   neither a Click nor a Hold.
+ * - A RELEASE stops the timer. kHoldMs equals the kernel's click limit, so
+ *   every press ends as either a Click or a Hold.
  *
  * feed() returns {None, None} for every code that is not a Click. Call it
  * from Screen::onKey(); call cancel() from onSuspend() so a hold in progress
@@ -36,7 +36,8 @@ public:
     enum class Kind : uint8_t { None, Click, Hold };
     struct Action { Kind kind; Btn btn; };
 
-    /// Receives Hold actions (from the LVGL timer, on the GUI thread).
+    /// Receives Hold actions (from the LVGL timer, on the GUI thread). A
+    /// Hold with no callback set is dropped with a one-time log warning.
     using Callback = void (*)(void* ctx, Action a);
 
     explicit KeyInput(Callback cb = nullptr, void* ctx = nullptr);
@@ -51,7 +52,7 @@ public:
     /// Drop a pending hold (button state unknown, e.g. on suspend).
     void cancel();
 
-    static constexpr uint32_t kHoldMs = 700;
+    static constexpr uint32_t kHoldMs = 500;
 
 private:
     void stopTimer();

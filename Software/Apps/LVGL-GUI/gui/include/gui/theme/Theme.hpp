@@ -49,7 +49,7 @@ constexpr uint32_t kAmber  = SDK::GUI::Color::YELLOW_DARK;
 constexpr uint32_t kBg     = SDK::GUI::Color::BLACK;
 
 /// Colour for a shooting percentage: kGood >= 50 %, kAmber 35-49 %, kBad
-/// < 35 %; kLine with no attempts. A threshold lookup only: the percentages
+/// < 35 %; kDim with no attempts. A threshold lookup only: the percentages
 /// themselves come from the service.
 uint32_t pctColor(uint16_t makes, uint16_t attempts);
 
@@ -76,15 +76,18 @@ void setText(lv_obj_t* label, const char* text);
 lv_obj_t* label(lv_obj_t* parent, Font f, const char* text, int32_t x, int32_t y, int32_t w,
                 lv_text_align_t align = LV_TEXT_ALIGN_CENTER, uint32_t color = kText);
 
-/// Screen header: SemiBold20, centred across the screen, letter-spaced 2 px.
-/// @p y is the text's vertical centre, as mockup y values are.
-lv_obj_t* header(lv_obj_t* parent, const char* text, int32_t y, uint32_t color = kAccent);
+/// Screen header: Regular14 (the mockups' headers are 11-13 px), centred
+/// across the screen, letter-spaced 2 px. Unlike label(), whose y is the top
+/// of the text box, @p yCentre is the text's vertical centre, as mockup y
+/// values are. Screens that want a bigger header place a label themselves.
+lv_obj_t* header(lv_obj_t* parent, const char* text, int32_t yCentre, uint32_t color = kAccent);
 
 /// Top of a label box in @p f whose text should be centred on @p yCentre.
 int32_t topFor(Font f, int32_t yCentre);
 
-/// "0:24", "12:41"; "1:02:03" from an hour up.
-void fmtMmSs(char* out, size_t n, uint32_t seconds);
+/// Duration: "m:ss" under an hour ("0:24", "12:41"), "h:mm:ss" from an
+/// hour up ("1:02:03").
+void fmtDuration(char* out, size_t n, uint32_t seconds);
 
 /// YYYYMMDD -> "6.10." (day.month.); "--" for 0.
 void fmtDate(char* out, size_t n, uint32_t ymd);

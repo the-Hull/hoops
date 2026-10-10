@@ -9,6 +9,10 @@
 
 #include "SDK/GUI/Button.hpp"
 
+#define LOG_MODULE_PRX      "KeyInput"
+#define LOG_MODULE_LEVEL    LOG_LEVEL_INFO
+#include "SDK/UnaLogger/Logger.h"
+
 namespace
 {
 
@@ -113,5 +117,11 @@ void KeyInput::timerCb(lv_timer_t* t)
     self->mPending   = { Kind::Hold, self->mPressed };
     if (self->mCb) {
         self->mCb(self->mCtx, self->mPending);
+    } else {
+        static bool sWarned = false;
+        if (!sWarned) {
+            sWarned = true;
+            LOG_WARNING("Hold on button %u dropped: no callback set\n", static_cast<unsigned>(self->mPending.btn));
+        }
     }
 }

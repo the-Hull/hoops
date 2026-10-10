@@ -37,7 +37,7 @@ const lv_font_t* font(Font f)
 uint32_t pctColor(uint16_t makes, uint16_t attempts)
 {
     if (attempts == 0) {
-        return kLine;
+        return kDim;
     }
     const uint32_t m100 = static_cast<uint32_t>(makes) * 100u;
     if (m100 >= 50u * attempts) {
@@ -79,15 +79,15 @@ int32_t topFor(Font f, int32_t yCentre)
     return yCentre - lv_font_get_line_height(font(f)) / 2;
 }
 
-lv_obj_t* header(lv_obj_t* parent, const char* text, int32_t y, uint32_t color)
+lv_obj_t* header(lv_obj_t* parent, const char* text, int32_t yCentre, uint32_t color)
 {
-    lv_obj_t* l = label(parent, Font::SemiBold20, text, 0, topFor(Font::SemiBold20, y), 240,
+    lv_obj_t* l = label(parent, Font::Regular14, text, 0, topFor(Font::Regular14, yCentre), 240,
                         LV_TEXT_ALIGN_CENTER, color);
     lv_obj_set_style_text_letter_space(l, 2, LV_PART_MAIN);
     return l;
 }
 
-void fmtMmSs(char* out, size_t n, uint32_t seconds)
+void fmtDuration(char* out, size_t n, uint32_t seconds)
 {
     const unsigned h = static_cast<unsigned>(seconds / 3600u);
     const unsigned m = static_cast<unsigned>((seconds % 3600u) / 60u);
