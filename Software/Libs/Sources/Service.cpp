@@ -16,15 +16,13 @@ using Event  = score::SessionEngine::Event;
 
 Service::Service(SDK::Kernel& kernel)
     : mKernel(kernel)
-    , mSecond(TIMER_SECONDS(1))
     , mTimeTracker(kernel.sys)
-{
-    mSecond.start();
-}
+{}
 
 void Service::run()
 {
     mTimeTracker.init();
+    mProcessedUtc = mTimeTracker.getExpectedUTC();
     LOG_INFO("thread started\n");
 
     while (true) {
@@ -57,7 +55,15 @@ void Service::run()
             mKernel.comm.releaseMessage(msg);
         }
 
-        if (mSecond.tick()) onSecond();
+        // One onSecond() per elapsed wall-clock second; capped so a long stall can't spin.
+        const std::time_t utc = mTimeTracker.getExpectedUTC();
+        uint8_t catchUp = 0;
+        while (mProcessedUtc != 0 && utc > mProcessedUtc && catchUp < 5) {
+            onSecond();
+            ++mProcessedUtc;
+            ++catchUp;
+        }
+        mProcessedUtc = utc;
     }
 }
 
@@ -95,7 +101,10 @@ void Service::handleMessage(SDK::MessageBase* msg)
         case CustomMessage::UNDO: {
             bool made = false;
             const bool ok = mEngine.undo(made);
-            if (ok) vibro(Effect::SHARP_TICK_1_100, 3);
+            if (ok) {
+                vibro(Effect::SHARP_TICK_1_100, 3);
+                backlightOn();
+            }
             sendUndoResult(ok, made);
             pushSnapshot();
         } break;
@@ -111,7 +120,10 @@ void Service::handleMessage(SDK::MessageBase* msg)
             break;
 
         case CustomMessage::SKIP_REST:
-            if (mEngine.skipRest()) vibro(Effect::ALERT_750MS_100);
+            if (mEngine.skipRest()) {
+                vibro(Effect::ALERT_750MS_100);
+                backlightOn();
+            }
             pushSnapshot();
             break;
 
@@ -222,9 +234,13 @@ void Service::sendWorkouts()
         SDK::send_msg<CustomMessage::WorkoutItem>(mKernel);   // {0, 0, {}}: empty list
         return;
     }
+    // Stateless: every GET_WORKOUTS resends the whole list from index 0.
     for (uint8_t i = 0; i < mWorkouts.count; ++i) {
         auto m = SDK::make_msg<CustomMessage::WorkoutItem>(mKernel);
-        if (!m) return;
+        if (!m) {
+            LOG_WARNING("sendWorkouts: no message block, list cut at %u/%u\n", i, mWorkouts.count);
+            return;
+        }
         m->index   = i;
         m->count   = mWorkouts.count;
         m->workout = mWorkouts.items[i];
@@ -244,13 +260,13 @@ void Service::sendResults(uint32_t sessionId)
     } else if (sessionId != 0 && mLoaded.id == sessionId) {   // Task 7 loads mLoaded from storage
         s = &mLoaded;
     }
-    if (!s) {
-        LOG_WARNING("GET_RESULTS: session %lu not available\n", static_cast<unsigned long>(sessionId));
-        return;
-    }
-
     auto m = SDK::make_msg<CustomMessage::Results>(mKernel);
     if (!m) return;
+    if (!s) {   // always answer: sessionId 0 with zeroed stats means "none"
+        LOG_WARNING("GET_RESULTS: session %lu not available\n", static_cast<unsigned long>(sessionId));
+        m.send();
+        return;
+    }
     const score::SessionSummary* row = mIndex.find(s->id);
     m->sessionId = s->id;
     m->ymd       = row ? row->ymd : todayYmd();
@@ -273,7 +289,16 @@ void Service::sendHistory()
 
 void Service::sendLocalTime()
 {
-    SDK::send_msg<CustomMessage::LocalTime>(mKernel, mTimeTracker.getLocalTime(std::time(nullptr)));
+    const std::tm t = mTimeTracker.getLocalTime(std::time(nullptr));
+    CustomMessage::Clock c{};
+    c.year = static_cast<uint16_t>(t.tm_year + 1900);
+    c.mon  = static_cast<uint8_t>(t.tm_mon + 1);
+    c.mday = static_cast<uint8_t>(t.tm_mday);
+    c.hour = static_cast<uint8_t>(t.tm_hour);
+    c.min  = static_cast<uint8_t>(t.tm_min);
+    c.sec  = static_cast<uint8_t>(t.tm_sec);
+    c.wday = static_cast<uint8_t>(t.tm_wday);
+    SDK::send_msg<CustomMessage::LocalTime>(mKernel, c);
 }
 
 void Service::finishSession(bool save)
@@ -288,6 +313,7 @@ void Service::finishSession(bool save)
         mLastEndedId = s.id;
         // Task 7: write the session file and push its summary into mIndex here.
         vibro(Effect::STRONG_CLICK_100);
+        backlightOn();
         SDK::send_msg<CustomMessage::Saved>(mKernel, s.id);
         LOG_INFO("session %lu ended: %u shots\n", static_cast<unsigned long>(s.id), s.count);
     } else {

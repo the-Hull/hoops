@@ -3,14 +3,16 @@
  * @brief Service <-> GUI IPC contract: custom message ids and payload structs.
  *
  * Payloads are the score:: PODs copied verbatim; the GUI never computes stats.
- * Every struct must fit the kernel's 256-byte message block.
+ * Every struct must fit the kernel's 256-byte message block and carries explicit pads
+ * instead of implicit padding, so its bytes are fully defined (asserted at the bottom).
  */
 
 #ifndef COMMANDS_HPP
 #define COMMANDS_HPP
 
+#include <cstddef>
 #include <cstdint>
-#include <ctime>
+#include <type_traits>
 
 #include "SDK/Messages/MessageBase.hpp"
 #include "SDK/Messages/MessageTypes.hpp"
@@ -54,20 +56,33 @@ constexpr SDK::MessageType::Type LOCAL_TIME    = 0x0207;
 constexpr SDK::MessageType::Type SAVED         = 0x0208;
 constexpr SDK::MessageType::Type WORKOUT_SAVED = 0x0209;
 
+/// Local wall-clock time; padding-free POD.
+struct Clock {
+    uint16_t year;   ///< e.g. 2026
+    uint8_t  mon;    ///< 1..12
+    uint8_t  mday;   ///< 1..31
+    uint8_t  hour, min, sec;
+    uint8_t  wday;   ///< 0 = Sunday
+};
+static_assert(sizeof(Clock) == 8 && std::has_unique_object_representations<Clock>::value, "Clock: no padding");
+
 // ---------------------------------------------------------------- GUI --> Service
 
 struct StartOpen : public SDK::MessageBase {
     uint8_t spot;   ///< score::Spot
+    uint8_t pad[3] = {};
     explicit StartOpen(uint8_t s = 0) : SDK::MessageBase(START_OPEN), spot(s) {}
 };
 
 struct StartWorkout : public SDK::MessageBase {
     uint8_t workoutId;   ///< preset 1..kPresetCount or user id >= kFirstUserWorkoutId
+    uint8_t pad[3] = {};
     explicit StartWorkout(uint8_t id = 0) : SDK::MessageBase(START_WORKOUT), workoutId(id) {}
 };
 
 struct Shot : public SDK::MessageBase {
     uint8_t made;   ///< 1 = make, 0 = miss
+    uint8_t pad[3] = {};
     explicit Shot(uint8_t m = 0) : SDK::MessageBase(SHOT), made(m) {}
 };
 
@@ -89,16 +104,19 @@ struct SkipRest : public SDK::MessageBase {
 
 struct ExtendRest : public SDK::MessageBase {
     uint16_t seconds;
+    uint8_t  pad[2] = {};
     explicit ExtendRest(uint16_t s = 15) : SDK::MessageBase(EXTEND_REST), seconds(s) {}
 };
 
 struct ChangeSpot : public SDK::MessageBase {
     uint8_t spot;   ///< score::Spot
+    uint8_t pad[3] = {};
     explicit ChangeSpot(uint8_t s = 0) : SDK::MessageBase(CHANGE_SPOT), spot(s) {}
 };
 
 struct EndSession : public SDK::MessageBase {
     uint8_t save;   ///< 1 = keep the session, 0 = discard
+    uint8_t pad[3] = {};
     explicit EndSession(uint8_t s = 1) : SDK::MessageBase(END_SESSION), save(s) {}
 };
 
@@ -112,11 +130,13 @@ struct GetWorkouts : public SDK::MessageBase {
 
 struct SaveWorkout : public SDK::MessageBase {
     score::Workout workout;   ///< id 0 = new, else replaces that user workout
+    uint8_t        pad[2] = {};
     explicit SaveWorkout(const score::Workout& w = {}) : SDK::MessageBase(SAVE_WORKOUT), workout(w) {}
 };
 
 struct DeleteWorkout : public SDK::MessageBase {
     uint8_t workoutId;
+    uint8_t pad[3] = {};
     explicit DeleteWorkout(uint8_t id = 0) : SDK::MessageBase(DELETE_WORKOUT), workoutId(id) {}
 };
 
@@ -139,6 +159,7 @@ struct SnapshotMsg : public SDK::MessageBase {
 struct UndoResult : public SDK::MessageBase {
     uint8_t ok;     ///< 1 = a shot was removed
     uint8_t made;   ///< the removed shot was a make
+    uint8_t pad[2] = {};
     explicit UndoResult(uint8_t o = 0, uint8_t m = 0) : SDK::MessageBase(UNDO_RESULT), ok(o), made(m) {}
 };
 
@@ -163,24 +184,27 @@ struct WorkoutItem : public SDK::MessageBase {
     WorkoutItem() : SDK::MessageBase(WORKOUT_ITEM) {}
 };
 
+/// sessionId 0 (stats zeroed) = no such session.
 struct Results : public SDK::MessageBase {
     uint32_t            sessionId = 0;
     uint32_t            ymd       = 0;
     uint16_t            workoutId = 0;
+    uint8_t             pad[2]    = {};
     score::SessionStats stats     = {};
     Results() : SDK::MessageBase(RESULTS) {}
 };
 
 /// Newest first.
 struct History : public SDK::MessageBase {
-    uint8_t               count = 0;
+    uint8_t               count  = 0;
+    uint8_t               pad[3] = {};
     score::SessionSummary items[score::kTrendCount] = {};
     History() : SDK::MessageBase(HISTORY) {}
 };
 
 struct LocalTime : public SDK::MessageBase {
-    std::tm tm;
-    explicit LocalTime(const std::tm& t = {}) : SDK::MessageBase(LOCAL_TIME), tm(t) {}
+    Clock clock;
+    explicit LocalTime(const Clock& c = {}) : SDK::MessageBase(LOCAL_TIME), clock(c) {}
 };
 
 struct Saved : public SDK::MessageBase {
@@ -190,6 +214,7 @@ struct Saved : public SDK::MessageBase {
 
 struct WorkoutSaved : public SDK::MessageBase {
     uint8_t workoutId;   ///< 0 = the save was refused
+    uint8_t pad[3] = {};
     explicit WorkoutSaved(uint8_t id = 0) : SDK::MessageBase(WORKOUT_SAVED), workoutId(id) {}
 };
 
@@ -218,6 +243,27 @@ static_assert(sizeof(History)       <= 256, "History exceeds the message block")
 static_assert(sizeof(LocalTime)     <= 256, "LocalTime exceeds the message block");
 static_assert(sizeof(Saved)         <= 256, "Saved exceeds the message block");
 static_assert(sizeof(WorkoutSaved)  <= 256, "WorkoutSaved exceeds the message block");
+
+// No implicit padding: payload begins right after MessageBase and sizes add up exactly.
+// (has_unique_object_representations can't apply to the messages themselves: MessageBase is
+// polymorphic. The embedded score:: PODs and Clock assert it on their own.)
+template <typename T>
+constexpr bool payloadIs(size_t bytes) { return sizeof(T) == sizeof(SDK::MessageBase) + bytes; }
+
+static_assert(payloadIs<StartOpen>(4) && payloadIs<StartWorkout>(4) && payloadIs<Shot>(4), "implicit padding");
+static_assert(payloadIs<Undo>(0) && payloadIs<Pause>(0) && payloadIs<Resume>(0) && payloadIs<SkipRest>(0),
+              "implicit padding");
+static_assert(payloadIs<ExtendRest>(4) && payloadIs<ChangeSpot>(4) && payloadIs<EndSession>(4), "implicit padding");
+static_assert(payloadIs<GetSnapshot>(0) && payloadIs<GetWorkouts>(0) && payloadIs<GetHistory>(0), "implicit padding");
+static_assert(payloadIs<SaveWorkout>(sizeof(score::Workout) + 2), "implicit padding");
+static_assert(payloadIs<DeleteWorkout>(4) && payloadIs<GetResults>(4), "implicit padding");
+static_assert(payloadIs<SnapshotMsg>(sizeof(score::Snapshot)) && payloadIs<UndoResult>(4), "implicit padding");
+static_assert(payloadIs<StepDone>(12), "implicit padding");
+static_assert(payloadIs<WorkoutItem>(2 + sizeof(score::Workout)), "implicit padding");
+static_assert(payloadIs<Results>(12 + sizeof(score::SessionStats)), "implicit padding");
+static_assert(payloadIs<History>(4 + sizeof(score::SessionSummary) * score::kTrendCount), "implicit padding");
+static_assert(payloadIs<LocalTime>(sizeof(Clock)) && payloadIs<Saved>(4) && payloadIs<WorkoutSaved>(4),
+              "implicit padding");
 
 } // namespace CustomMessage
 

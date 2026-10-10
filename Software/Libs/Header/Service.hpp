@@ -2,11 +2,11 @@
 #define __SERVICE_HPP__
 
 #include <cstdint>
+#include <ctime>
 
 #include "SDK/Kernel/Kernel.hpp"
 #include "SDK/Messages/CommandMessages.hpp"
 #include "SDK/Metrics/MonotonicTime.hpp"
-#include "SDK/Timer/Timer.hpp"
 
 #include "score/History.hpp"
 #include "score/Session.hpp"
@@ -44,7 +44,7 @@ private:
     score::SessionIndex  mIndex{};
     score::Session       mLoaded{};        ///< a past session loaded for GET_RESULTS (storage: Task 7)
     uint32_t             mLastEndedId = 0; ///< id of the last session ended with save
-    SDK::Timer           mSecond;
+    std::time_t          mProcessedUtc = 0;  ///< last second handed to onSecond()
     SDK::Metric::MonotonicTime<SDK::Interface::ISystem> mTimeTracker;
 };
 
