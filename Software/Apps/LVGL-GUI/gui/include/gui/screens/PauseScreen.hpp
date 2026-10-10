@@ -64,7 +64,7 @@ private:
     lv_timer_t*    mConfirmTimer = nullptr;   ///< Discard confirmation window
     bool           mConfirming   = false;
     bool           mEnding       = false;     ///< END_SESSION sent
-    bool           mSaved        = false;     ///< SAVED arrived; Results requested
+    bool           mSaved        = false;     ///< SAVED arrived; Results on its way
     bool           mSeenPaused   = false;     ///< a Paused snapshot arrived here
 };
 

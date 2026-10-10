@@ -61,6 +61,8 @@ public:
     void saveWorkout(const score::Workout& w);
     void deleteWorkout(uint8_t id);
     void requestResults(uint32_t sessionId);   ///< 0 = the session just ended
+    /// Forget the results held, so the Results screen requests fresh ones.
+    void clearResults() { mHasResults = false; }
     void requestHistory();
     void exitApp();
 
@@ -94,6 +96,7 @@ public:
 
     enum class ResultsFrom : uint8_t { Session, History };
     ResultsFrom resultsFrom = ResultsFrom::Session;
+    uint32_t    resultsSessionId = 0;   ///< saved session to show when resultsFrom == History
 
     uint8_t homeIndex = 0, workoutsIndex = 0, historyIndex = 0, resultsPage = 0;
     uint8_t selectedWorkoutId = 1;   ///< preview / start

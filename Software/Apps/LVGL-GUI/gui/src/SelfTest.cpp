@@ -10,11 +10,13 @@
 #ifdef HOOPS_SELFTEST
 
 #include <cstdint>
+#include <cstring>
 
 #include "lvgl.h"
 
 #include "gui/model/Model.hpp"
 #include "gui/screens/ScreenManager.hpp"
+#include "gui/theme/Theme.hpp"
 
 #define LOG_MODULE_PRX      "SelfTest"
 #define LOG_MODULE_LEVEL    LOG_LEVEL_INFO
@@ -50,9 +52,56 @@ bool onPause(const Model&)      { return onScreen(ScreenId::Pause); }
 bool onResults(const Model&)    { return onScreen(ScreenId::Results); }
 bool onHome(const Model&)       { return onScreen(ScreenId::Home); }
 
-// Two sessions: the first is played, changes spot (hold DOWN, navigation on
-// the release), pauses, resumes and is saved (Results); the second is
-// discarded through the double SELECT.
+/// A label under @p o whose text equals (or, with @p contains, holds)
+/// @p text; @p color 0 = any colour.
+bool findLabel(lv_obj_t* o, const char* text, uint32_t color = 0, bool contains = false)
+{
+    if (lv_obj_check_type(o, &lv_label_class)) {
+        const char* t = lv_label_get_text(o);
+        const bool match = contains ? strstr(t, text) != nullptr : strcmp(t, text) == 0;
+        if (match && (color == 0 || lv_color_eq(lv_obj_get_style_text_color(o, LV_PART_MAIN), lv_color_hex(color)))) {
+            return true;
+        }
+    }
+    const uint32_t n = lv_obj_get_child_count(o);
+    for (uint32_t i = 0; i < n; ++i) {
+        if (findLabel(lv_obj_get_child(o, i), text, color, contains)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool onScreenLabel(const char* text, uint32_t color = 0, bool contains = false)
+{
+    return findLabel(lv_screen_active(), text, color, contains);
+}
+
+// Session 3: 3PT Top 3/5 (three makes in a row), Mid L-Baseline 1/2, FT 1/2
+// = 5/9, 56 %. Labels hold the text as drawn (" · " -> " - ").
+bool resultsPage1(const Model& m)
+{
+    return onScreen(ScreenId::Results) && m.resultsPage == 0 && onScreenLabel("5/9 - ") && onScreenLabel("56 %")
+        && onScreenLabel("SESSION - 1 / 4");
+}
+bool resultsPage2(const Model& m)
+{
+    return onScreen(ScreenId::Results) && m.resultsPage == 1 && onScreenLabel("3/5") && onScreenLabel("Top 3/5");
+}
+bool resultsPage3(const Model& m)
+{
+    return onScreen(ScreenId::Results) && m.resultsPage == 2 && onScreenLabel("3", Theme::kAccent)
+        && onScreenLabel("STREAK");
+}
+bool resultsPage4(const Model& m)
+{
+    return onScreen(ScreenId::Results) && m.resultsPage == 3 && onScreenLabel("TREND - 4 / 4");
+}
+
+// Three sessions: the first is played, changes spot (hold DOWN, navigation
+// on the release), pauses, resumes and is saved (Results); the second is
+// discarded through the double SELECT; the third covers three spots and is
+// saved, and its results are paged through.
 const Step kSteps[] = {
     { 1500, nullptr, nullptr, '3', "Home: SELECT Open Session -> SpotPicker" },
     {  500, nullptr, nullptr, '2', "SpotPicker: DOWN" },
@@ -92,6 +141,52 @@ const Step kSteps[] = {
                              '3', "Pause: SELECT after the 3 s window -> confirm again" },
     {  500, nullptr, nullptr, '3', "Pause: SELECT -> discard, Home" },
     { 1500, onHome, "on Home after discard",
+                             '3', "Home: SELECT Open Session -> SpotPicker" },
+    // Session 3: three spots in three categories, a 3-make streak, End & save.
+    {  500, nullptr, nullptr, '3', "SpotPicker: SELECT (3PT Top) -> Active" },
+    { 1200, nullptr, nullptr, '3', "Active: make" },
+    {  400, nullptr, nullptr, '3', "Active: make" },
+    {  400, nullptr, nullptr, '3', "Active: make" },
+    {  400, nullptr, nullptr, '4', "Active: miss" },
+    {  400, nullptr, nullptr, '4', "Active: miss" },
+    {  600, nullptr, nullptr, 'w', "Active: DOWN press" },
+    {  600, nullptr, nullptr, 's', "Active: DOWN release -> SpotPicker" },
+    {  600, nullptr, nullptr, '2', "SpotPicker: DOWN" },
+    {  300, nullptr, nullptr, '2', "SpotPicker: DOWN" },
+    {  300, nullptr, nullptr, '2', "SpotPicker: DOWN (Mid L-Baseline)" },
+    {  400, nullptr, nullptr, '3', "SpotPicker: SELECT -> changeSpot, Active" },
+    {  800, nullptr, nullptr, '3', "Active: make" },
+    {  400, nullptr, nullptr, '4', "Active: miss" },
+    {  600, nullptr, nullptr, 'w', "Active: DOWN press" },
+    {  600, nullptr, nullptr, 's', "Active: DOWN release -> SpotPicker" },
+    {  600, nullptr, nullptr, '2', "SpotPicker: DOWN" },
+    {  300, nullptr, nullptr, '2', "SpotPicker: DOWN" },
+    {  300, nullptr, nullptr, '2', "SpotPicker: DOWN" },
+    {  300, nullptr, nullptr, '2', "SpotPicker: DOWN" },
+    {  300, nullptr, nullptr, '2', "SpotPicker: DOWN (Free Throw)" },
+    {  400, nullptr, nullptr, '3', "SpotPicker: SELECT -> changeSpot, Active" },
+    {  800, nullptr, nullptr, '4', "Active: miss" },
+    {  400, nullptr, nullptr, '3', "Active: make" },
+    {  600, nullptr, nullptr, '2', "Active: DOWN -> pause, Pause" },
+    {  800, nullptr, nullptr, '2', "Pause: DOWN -> End & save" },
+    {  500, nullptr, nullptr, '3', "Pause: SELECT End & save -> Results" },
+    { 1500, resultsPage1, "Results page 1: total 5/9 - 56 %",
+                             '1', "Results 1: UP (previous spot)" },
+    {  500, nullptr, nullptr, '2', "Results 1: DOWN (next spot)" },
+    {  500, nullptr, nullptr, '3', "Results 1: SELECT -> page 2" },
+    {  500, resultsPage2, "Results page 2: 3PT 3/5, footer Top 3/5",
+                             '2', "Results 2: DOWN (Mid-range)" },
+    {  500, nullptr, nullptr, '1', "Results 2: UP (3PT)" },
+    {  500, nullptr, nullptr, '3', "Results 2: SELECT -> page 3" },
+    {  500, resultsPage3, "Results page 3: STREAK 3",
+                             '3', "Results 3: SELECT -> page 4" },
+    {  500, resultsPage4, "Results page 4: trend",
+                             '1', "Results 4: UP" },
+    {  500, nullptr, nullptr, '2', "Results 4: DOWN" },
+    {  500, nullptr, nullptr, '3', "Results 4: SELECT -> page 1" },
+    {  500, resultsPage1, "Results wrapped to page 1",
+                             '4', "Results: BACK -> Home" },
+    { 1000, onHome, "on Home after Results",
                              '4', "Home: BACK -> exit app" },
 };
 constexpr uint32_t kCount = sizeof(kSteps) / sizeof(kSteps[0]);
@@ -111,9 +206,19 @@ void logSnapshot()
              s.last5Count, s.last5Bits, static_cast<unsigned long>(s.elapsed_s));
 }
 
+void logPool()
+{
+    lv_mem_monitor_t mon;
+    lv_mem_monitor(&mon);
+    LOG_INFO("pool: %u B used, peak %u B (screen %u, results page %u)\n",
+             static_cast<unsigned>(mon.total_size - mon.free_size), static_cast<unsigned>(mon.max_used),
+             static_cast<unsigned>(ScreenManager::instance().current()), static_cast<unsigned>(sModel->resultsPage));
+}
+
 void tick(lv_timer_t* t)
 {
     logSnapshot();
+    logPool();
     const Step& step = kSteps[sIndex++];
     if (step.check) {
         const bool ok = step.check(*sModel);

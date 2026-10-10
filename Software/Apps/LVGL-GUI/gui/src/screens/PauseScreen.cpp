@@ -205,9 +205,11 @@ void PauseScreen::onSnapshot(const score::Snapshot& s)
 void PauseScreen::onSaved(uint32_t id)
 {
     (void)id;
+    // Results requests the session just ended (GET_RESULTS 0) on show.
     mSaved              = true;
     mModel.resultsFrom  = Model::ResultsFrom::Session;
-    mModel.requestResults(0);
+    mModel.resultsPage  = 0;
+    mModel.clearResults();
     ScreenManager::instance().goTo(ScreenId::Results);
 }
 
