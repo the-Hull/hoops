@@ -1,0 +1,54 @@
+#ifndef __STORAGE_HPP__
+#define __STORAGE_HPP__
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+
+#include "SDK/Kernel/Kernel.hpp"
+
+#include "score/History.hpp"
+#include "score/Serializer.hpp"
+#include "score/Session.hpp"
+
+/// Flash files of the app, framed by score::ser. The only place that touches the file system.
+/// Paths are relative to the app directory:
+///   workouts.bin          user workouts (WorkoutStore)
+///   current.bin           the running session, for crash resume
+///   sessions/index.bin    session summaries (SessionIndex)
+///   sessions/<id>.bin     one finished session each
+/// Every failure is logged at WARNING and returned as false; nothing asserts.
+class Storage
+{
+public:
+    explicit Storage(const SDK::Kernel& kernel);
+
+    bool loadWorkouts(score::WorkoutStore& out);
+    bool saveWorkouts(const score::WorkoutStore& in);
+
+    bool loadIndex(score::SessionIndex& out);
+    bool saveIndex(const score::SessionIndex& in);
+
+    bool saveCurrent(const score::Session& s);
+    bool loadCurrent(score::Session& out);
+    void clearCurrent();   ///< no-op when absent
+
+    bool saveSession(const score::Session& s);
+    bool loadSession(uint32_t id, score::Session& out);   ///< false (out zeroed) on id/count mismatch
+    void removeSession(uint32_t id);                      ///< no-op when absent
+
+private:
+    bool write(const char* path, uint32_t magic, const void* obj, size_t size);
+    bool read(const char* path, uint32_t magic, void* obj, size_t size);
+    void remove(const char* path);
+    static void sessionPath(uint32_t id, char* out, size_t cap);
+
+    /// Largest persisted payload; SessionIndex (1804 B) outgrows Session (1632 B).
+    static constexpr size_t kMaxPayload =
+        std::max({sizeof(score::Session), sizeof(score::SessionIndex), sizeof(score::WorkoutStore)});
+
+    const SDK::Kernel& mKernel;
+    uint8_t            mBuf[sizeof(score::ser::Header) + kMaxPayload];
+};
+
+#endif

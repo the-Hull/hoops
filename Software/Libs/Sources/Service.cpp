@@ -16,6 +16,7 @@ using Event  = score::SessionEngine::Event;
 
 Service::Service(SDK::Kernel& kernel)
     : mKernel(kernel)
+    , mStorage(kernel)
     , mTimeTracker(kernel.sys)
 {}
 
@@ -24,6 +25,17 @@ void Service::run()
     mTimeTracker.init();
     mProcessedUtc = mTimeTracker.getExpectedUTC();
     LOG_INFO("thread started\n");
+
+    if (mStorage.loadWorkouts(mWorkouts) && !mWorkouts.valid()) {
+        LOG_WARNING("workouts.bin out of range, starting empty\n");
+        mWorkouts = score::WorkoutStore{};
+    }
+    if (mStorage.loadIndex(mIndex) && !mIndex.valid()) {
+        LOG_WARNING("sessions/index.bin out of range, starting empty\n");
+        mIndex = score::SessionIndex{};
+    }
+    LOG_INFO("loaded %u workouts, %u sessions\n", mWorkouts.count, mIndex.count);
+    restoreCurrent();
 
     while (true) {
         SDK::MessageBase* msg;
@@ -72,7 +84,9 @@ void Service::handleMessage(SDK::MessageBase* msg)
     switch (msg->getType()) {
         case CustomMessage::START_OPEN: {
             const auto* m = static_cast<CustomMessage::StartOpen*>(msg);
-            if (!mEngine.startOpen(static_cast<score::Spot>(m->spot), nowUnix()))
+            if (mEngine.startOpen(static_cast<score::Spot>(m->spot), nowUnix()))
+                autosave();
+            else
                 LOG_WARNING("START_OPEN refused (spot %u)\n", m->spot);
             pushSnapshot();
         } break;
@@ -81,7 +95,9 @@ void Service::handleMessage(SDK::MessageBase* msg)
             const uint8_t id = static_cast<CustomMessage::StartWorkout*>(msg)->workoutId;
             const score::Workout* w = score::findPreset(id);
             if (!w) w = mWorkouts.find(id);
-            if (!w || !mEngine.startWorkout(*w, nowUnix()))
+            if (w && mEngine.startWorkout(*w, nowUnix()))
+                autosave();
+            else
                 LOG_WARNING("START_WORKOUT refused (id %u)\n", id);
             pushSnapshot();
         } break;
@@ -93,6 +109,7 @@ void Service::handleMessage(SDK::MessageBase* msg)
             if (mEngine.session().count != before) {
                 vibro(made ? Effect::SHARP_CLICK_100 : Effect::SHORT_DOUBLE_CLICK_STRONG_1_100);
                 backlightOn();
+                autosave();
             }
             pushSnapshot();
             onEvent(ev);
@@ -104,13 +121,14 @@ void Service::handleMessage(SDK::MessageBase* msg)
             if (ok) {
                 vibro(Effect::SHARP_TICK_1_100, 3);
                 backlightOn();
+                autosave();
             }
             sendUndoResult(ok, made);
             pushSnapshot();
         } break;
 
         case CustomMessage::PAUSE:
-            mEngine.pause();
+            if (mEngine.pause()) autosave();   // ticks don't save while paused
             pushSnapshot();
             break;
 
@@ -133,7 +151,8 @@ void Service::handleMessage(SDK::MessageBase* msg)
             break;
 
         case CustomMessage::CHANGE_SPOT:
-            mEngine.changeSpot(static_cast<score::Spot>(static_cast<CustomMessage::ChangeSpot*>(msg)->spot));
+            if (mEngine.changeSpot(static_cast<score::Spot>(static_cast<CustomMessage::ChangeSpot*>(msg)->spot)))
+                autosave();
             pushSnapshot();
             break;
 
@@ -156,16 +175,21 @@ void Service::handleMessage(SDK::MessageBase* msg)
             if (!ok) {
                 LOG_WARNING("SAVE_WORKOUT refused (id %u)\n", w.id);
                 id = 0;
+            } else {
+                mStorage.saveWorkouts(mWorkouts);
             }
-            // Task 7: persist the store here.
             SDK::send_msg<CustomMessage::WorkoutSaved>(mKernel, id);
             sendWorkouts();
         } break;
 
         case CustomMessage::DELETE_WORKOUT: {
             const uint8_t id = static_cast<CustomMessage::DeleteWorkout*>(msg)->workoutId;
-            if (!mWorkouts.remove(id)) LOG_WARNING("DELETE_WORKOUT: no workout %u\n", id);
-            // Task 7: persist the store here.
+            if (mEngine.isActive() && mEngine.session().workoutId == id)
+                LOG_WARNING("DELETE_WORKOUT refused: workout %u is running\n", id);
+            else if (!mWorkouts.remove(id))
+                LOG_WARNING("DELETE_WORKOUT: no workout %u\n", id);
+            else
+                mStorage.saveWorkouts(mWorkouts);
             sendWorkouts();
         } break;
 
@@ -187,6 +211,10 @@ void Service::onSecond()
 {
     if (!mEngine.isActive()) return;
     const Event ev = mEngine.tick();
+    // Running time only: a paused session was saved on PAUSE and doesn't change.
+    if (ev != Event::None ||
+        (mEngine.state() != score::SessionState::Paused && ++mSaveTicks >= kAutosaveTicks))
+        autosave();
     pushSnapshot();
     onEvent(ev);
 }
@@ -257,7 +285,7 @@ void Service::sendResults(uint32_t sessionId)
     const score::Session* s = nullptr;
     if (liveEnded && (sessionId == 0 || sessionId == live.id)) {
         s = &live;
-    } else if (sessionId != 0 && mLoaded.id == sessionId) {   // Task 7 loads mLoaded from storage
+    } else if (sessionId != 0 && (mLoaded.id == sessionId || mStorage.loadSession(sessionId, mLoaded))) {
         s = &mLoaded;
     }
     auto m = SDK::make_msg<CustomMessage::Results>(mKernel);
@@ -309,9 +337,17 @@ void Service::finishSession(bool save)
         return;
     }
     const score::Session& s = mEngine.end();
+    mStorage.clearCurrent();
+    mSaveTicks = 0;
     if (save) {
         mLastEndedId = s.id;
-        // Task 7: write the session file and push its summary into mIndex here.
+        if (!mStorage.saveSession(s)) LOG_WARNING("session %lu: file not written\n", static_cast<unsigned long>(s.id));
+        const uint32_t evicted = mIndex.push(score::summarize(s, todayYmd()));
+        if (evicted != 0) {
+            mStorage.removeSession(evicted);
+            if (mLoaded.id == evicted) mLoaded = score::Session{};
+        }
+        mStorage.saveIndex(mIndex);
         vibro(Effect::STRONG_CLICK_100);
         backlightOn();
         SDK::send_msg<CustomMessage::Saved>(mKernel, s.id);
@@ -362,6 +398,36 @@ void Service::backlightOn(uint32_t ms)
         bl->autoOffTimeoutMs = ms;
         bl.send();
     }
+}
+
+void Service::restoreCurrent()
+{
+    // mLoaded doubles as scratch: a 1.6 KB Session is too big for the 10 KB service stack.
+    if (!mStorage.loadCurrent(mLoaded)) {
+        mStorage.clearCurrent();   // drops a corrupt file; no-op when absent
+        return;
+    }
+    const uint16_t wid = mLoaded.workoutId;
+    const score::Workout* w = nullptr;
+    if (wid != 0 && wid <= UINT8_MAX) {
+        w = score::findPreset(static_cast<uint8_t>(wid));
+        if (!w) w = mWorkouts.find(static_cast<uint8_t>(wid));
+    }
+    if (mEngine.restore(mLoaded, w)) {
+        LOG_INFO("session %lu restored (%u shots, workout %u%s)\n", static_cast<unsigned long>(mLoaded.id),
+                 mLoaded.count, wid, (wid != 0 && !w) ? " gone, continuing open" : "");
+        autosave();   // persist the Paused state (and any open-session fallback)
+    } else {
+        LOG_WARNING("current.bin rejected by restore, deleting\n");
+        mStorage.clearCurrent();
+    }
+    mLoaded = score::Session{};
+}
+
+void Service::autosave()
+{
+    mSaveTicks = 0;
+    if (mEngine.isActive()) mStorage.saveCurrent(mEngine.session());
 }
 
 uint32_t Service::nowUnix() const
