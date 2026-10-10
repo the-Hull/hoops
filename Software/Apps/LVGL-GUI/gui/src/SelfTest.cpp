@@ -564,7 +564,7 @@ const Step kSteps[] = {
     {   30, nullptr, nullptr, 'd', "Active: SELECT release, then its CLICK (RELEASE before CLICK)", &lateSelectClick },
     {  600, sixMakes, "short press, RELEASE then CLICK: one make, 6/6",
                              'e', "Active: SELECT press (short)" },
-    {   30, nullptr, nullptr, 'd', "Active: SELECT release, no CLICK at all (HoldRelease after 60 ms)" },
+    {   30, nullptr, nullptr, 'd', "Active: SELECT release, no CLICK at all (HoldRelease after 150 ms)" },
     {  600, sevenMakes, "short press without CLICK: one make (delayed HoldRelease), 7/7",
                              'w', "Active: DOWN press" },
     {  600, holdHint, "hold fired: still on Active, toast Release to change spot",

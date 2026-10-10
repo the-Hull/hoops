@@ -92,11 +92,11 @@ KeyInput::Action KeyInput::feed(uint8_t code)
                 return { Kind::HoldRelease, d.btn };
             }
             // Short, and no CLICK yet: it may still come after this RELEASE.
-            // Wait kClickWaitMs for it; without it the press ends as a
+            // Wait kReleaseGraceMs for it; without it the press ends as a
             // HoldRelease, delivered through the callback.
             stopReleaseTimer();
             mReleaseBtn   = d.btn;
-            mReleaseTimer = lv_timer_create(&KeyInput::releaseTimerCb, kClickWaitMs, this);
+            mReleaseTimer = lv_timer_create(&KeyInput::releaseTimerCb, kReleaseGraceMs, this);
             return kNone;
         }
 
@@ -175,7 +175,7 @@ void KeyInput::deliver(Action a)
 
 void KeyInput::releaseTimerCb(lv_timer_t* t)
 {
-    // No CLICK within kClickWaitMs of the RELEASE: the press ends as a
+    // No CLICK within kReleaseGraceMs of the RELEASE: the press ends as a
     // HoldRelease. (The callback may switch screens: touch nothing after.)
     static_cast<KeyInput*>(lv_timer_get_user_data(t))->flushRelease();
 }

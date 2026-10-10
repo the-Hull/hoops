@@ -11,11 +11,11 @@
  * nothing here depends on it.
  *
  * Every press ends as exactly one of Click or HoldRelease:
- * - A CLICK while the button is down (or within kClickWaitMs after its
+ * - A CLICK while the button is down (or within kReleaseGraceMs after its
  *   RELEASE) is the press's action: {Click, btn}, returned from feed().
  * - A RELEASE after the hold timer fired (>= kHoldMs; the kernel sends no
  *   CLICK then) returns {HoldRelease, btn} from feed() at once.
- * - A short RELEASE with no CLICK yet waits kClickWaitMs: a CLICK in that
+ * - A short RELEASE with no CLICK yet waits kReleaseGraceMs: a CLICK in that
  *   window is returned as the Click (and nothing else follows); otherwise
  *   {HoldRelease, btn} is delivered through the Callback when the wait
  *   ends (a press the kernel did not count as a click: its timing and ours
@@ -77,7 +77,12 @@ public:
     void cancel();
 
     static constexpr uint32_t kHoldMs      = 500;
-    static constexpr uint32_t kClickWaitMs = 60;   ///< after a short RELEASE, for a late CLICK
+    /// How long a short RELEASE without CLICK waits for a late CLICK before
+    /// it becomes a HoldRelease. The port delivers one key code per GUI
+    /// frame (100 ms at SDK::GUI::Config::kFrameRate 10), before LVGL's
+    /// timers run, so a CLICK queued right behind its RELEASE reaches us
+    /// one frame later: the grace covers a full frame plus jitter.
+    static constexpr uint32_t kReleaseGraceMs = 150;
 
 private:
     void stopTimer();
@@ -89,7 +94,7 @@ private:
     static void releaseTimerCb(lv_timer_t* t);
 
     lv_timer_t* mTimer        = nullptr;   ///< kHoldMs after PRESS
-    lv_timer_t* mReleaseTimer = nullptr;   ///< kClickWaitMs after a short RELEASE without CLICK
+    lv_timer_t* mReleaseTimer = nullptr;   ///< kReleaseGraceMs after a short RELEASE without CLICK
     Btn         mReleaseBtn   = Btn::None; ///< the button whose CLICK may still come
     Btn         mPressed   = Btn::None;   ///< button held down, if any
     Btn         mSuppress  = Btn::None;   ///< its next Click is swallowed (a Hold fired)

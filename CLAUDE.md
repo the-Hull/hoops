@@ -120,8 +120,8 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
   LVGL: key events via `LV_EVENT_KEY` → `Screen::onKey(code)`, one code per 100 ms frame. The kernel sends PRESS,
   RELEASE and CLICK (only for holds < 500 ms); the simulator sends CLICK before RELEASE, the watch's order is not
   documented, so `KeyInput` does not depend on it: every press ends as exactly one Click or HoldRelease (a short
-  RELEASE without CLICK waits 60 ms for a late CLICK, else becomes a HoldRelease via the callback; after a 500 ms
-  Hold the RELEASE is a HoldRelease at once). Screens act on `KeyInput::isActivate()` in `Screen::onAction()`
+  RELEASE without CLICK waits `kReleaseGraceMs` = 150 ms, one 100 ms frame plus jitter, for a late CLICK, else
+  becomes a HoldRelease via the callback; after a 500 ms Hold the RELEASE is a HoldRelease at once). Screens act on `KeyInput::isActivate()` in `Screen::onAction()`
   (feed() results and callback deliveries alike), so a slow press is never lost and a short one never counts
   twice; screens that navigate on a hold do it on HoldRelease, so the release can't reach the next screen.
 - Sensors (`SDK::Sensor::Type`): ACCELEROMETER, GYROSCOPE, FUSION, HEART_RATE, WRIST_MOTION, MOTION_DETECT,
@@ -185,7 +185,7 @@ Known limitations / next:
 - Idle timeout (60 s, exits the app) only on Home and only without a session in progress.
 - The date (LOCAL_TIME) is sent once at GUI start; a GUI left open past midnight shows yesterday's "today".
 - Hold = 500 ms (`KeyInput::kHoldMs`) with HoldRelease semantics (see Hardware facts). A CLICK that reaches the
-  GUI more than 60 ms (`kClickWaitMs`, in practice one frame) after its RELEASE would count twice — confirm on
+  GUI more than 150 ms (`kReleaseGraceMs`, one frame plus jitter) after its RELEASE would count twice — confirm on
   the watch.
 - Workout ids are reused after a delete (lowest free id ≥ 100), and History rows store only the id, so an
   old row shows the name of whatever workout now has that id.
