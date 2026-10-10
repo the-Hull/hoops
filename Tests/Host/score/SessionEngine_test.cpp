@@ -62,3 +62,23 @@ TEST(EngineRestore, ComesBackPaused) { SessionEngine a; Workout w = two(); a.sta
 TEST(EngineRestore, WithoutWorkoutBecomesOpen) { SessionEngine a; a.startWorkout(two(), 1); a.shot(true);
   SessionEngine b; ASSERT_TRUE(b.restore(a.session(), nullptr)); EXPECT_EQ(b.snapshot().mode, 0); b.resume(); EXPECT_TRUE(b.changeSpot(Spot::LayupL)); }
 TEST(EngineRestore, EndedRefused) { SessionEngine a; a.startOpen(Spot::Ft, 1); a.end(); SessionEngine b; EXPECT_FALSE(b.restore(a.session(), nullptr)); }
+TEST(EngineRestore, RestWithoutWorkoutResumesOpenActive) { SessionEngine a; a.startWorkout(two(), 1); a.shot(true); a.shot(true); a.shot(true);
+  ASSERT_EQ(a.state(), SessionState::Rest);
+  SessionEngine b; ASSERT_TRUE(b.restore(a.session(), nullptr)); b.resume();
+  EXPECT_EQ(b.state(), SessionState::Active); EXPECT_EQ(b.snapshot().mode, 0); EXPECT_EQ(b.snapshot().spot, (uint8_t)Spot::Ft);
+  EXPECT_EQ(b.tick(), SessionEngine::Event::None); EXPECT_EQ(b.snapshot().spot, (uint8_t)Spot::Ft); EXPECT_EQ(b.snapshot().stepIndex, 0);
+  EXPECT_EQ(b.snapshot().restRemaining_s, 0); bool m; EXPECT_FALSE(b.undo(m)); }
+TEST(EngineRestore, PausedFromRestWithoutWorkoutResumesActive) { SessionEngine a; a.startWorkout(two(), 1); a.shot(true); a.shot(true); a.shot(true); a.pause();
+  SessionEngine b; ASSERT_TRUE(b.restore(a.session(), nullptr)); b.resume();
+  EXPECT_EQ(b.state(), SessionState::Active); EXPECT_EQ(b.tick(), SessionEngine::Event::None); EXPECT_EQ(b.snapshot().spot, (uint8_t)Spot::Ft); }
+TEST(EngineRestore, InvalidPausedFromFallsBackToActive) { SessionEngine a; a.startOpen(Spot::Ft, 1); a.shot(true);
+  for (SessionState bad : { SessionState::Paused, SessionState::Ended, SessionState::Idle }) {
+    Session s = a.session(); s.state = (uint8_t)SessionState::Paused; s.pausedFrom = (uint8_t)bad;
+    SessionEngine b; ASSERT_TRUE(b.restore(s, nullptr)); EXPECT_TRUE(b.resume()); EXPECT_EQ(b.state(), SessionState::Active); } }
+TEST(EngineRestore, RestOnLastStepRefused) { SessionEngine a; Workout w = two(); a.startWorkout(w, 1); a.shot(true); a.shot(true); a.shot(true);
+  Session s = a.session(); s.stepIndex = 1; SessionEngine b; EXPECT_FALSE(b.restore(s, &w)); }
+TEST(EngineWorkout, UndoCannotRemoveWorkoutCompletingShot) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true); e.skipRest();
+  e.shot(true); ASSERT_EQ(e.shot(true), SessionEngine::Event::WorkoutDone);
+  bool m; EXPECT_FALSE(e.undo(m)); e.shot(true); EXPECT_TRUE(e.undo(m)); EXPECT_FALSE(e.undo(m)); }
+TEST(EngineWorkout, NextSpotShownWhilePausedInRest) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true);
+  e.pause(); EXPECT_EQ(e.snapshot().nextSpot, (uint8_t)Spot::Top3); }

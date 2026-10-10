@@ -38,16 +38,28 @@ bool SessionEngine::restore(const Session& saved, const Workout* w)
     if (saved.count > kMaxShots || saved.stepStartCount > saved.count) return false;
     if (w && (w->stepCount == 0 || w->stepCount > kMaxSteps || saved.stepIndex >= w->stepCount)) return false;
 
+    SessionState from = (s == SessionState::Paused) ? static_cast<SessionState>(saved.pausedFrom) : s;
+    if (from != SessionState::Active && from != SessionState::Rest) from = SessionState::Active;
+    // Rest on the last step never happens; advancing from it would run past the step list.
+    if (w && from == SessionState::Rest && saved.stepIndex + 1 >= w->stepCount) return false;
+
     mSession = saved;
     if (w) {
         mWorkout    = *w;
         mHasWorkout = true;
     } else {
-        mHasWorkout           = false;
-        mSession.workoutId    = 0;
-        mSession.workoutDone  = 0;
+        // Workout definition gone: continue as an open session at the current spot.
+        mWorkout                 = Workout{};
+        mHasWorkout              = false;
+        mSession.workoutId       = 0;
+        mSession.workoutDone     = 0;
+        mSession.stepIndex       = 0;
+        mSession.stepElapsed_s   = 0;
+        mSession.restRemaining_s = 0;
+        mSession.stepStartCount  = mSession.count;
+        if (from == SessionState::Rest) from = SessionState::Active;
     }
-    mSession.pausedFrom = (s == SessionState::Paused) ? saved.pausedFrom : saved.state;
+    mSession.pausedFrom = st(from);
     mSession.state      = st(SessionState::Paused);
     mResumable          = true;
     mLastStep           = StepResult{};
@@ -76,7 +88,8 @@ SessionEngine::Event SessionEngine::completeStep()
     mLastStep = { mSession.stepIndex, stepMakes(),
                   static_cast<uint16_t>(mSession.count - mSession.stepStartCount), rest };
     if (mSession.stepIndex + 1 >= mWorkout.stepCount) {
-        mSession.workoutDone = 1;
+        mSession.workoutDone    = 1;
+        mSession.stepStartCount = mSession.count;   // only extra shots can be undone
         return Event::WorkoutDone;
     }
     if (rest > 0) {
@@ -217,7 +230,9 @@ Snapshot SessionEngine::snapshot() const
         s.stepCount = mWorkout.stepCount;
         s.goalType  = step().goal.type;
         s.goalValue = step().goal.value;
-        if (state() == SessionState::Rest && mSession.stepIndex + 1 < mWorkout.stepCount)
+        const bool resting = state() == SessionState::Rest ||
+            (state() == SessionState::Paused && mSession.pausedFrom == st(SessionState::Rest));
+        if (resting && mSession.stepIndex + 1 < mWorkout.stepCount)
             s.nextSpot = mWorkout.steps[mSession.stepIndex + 1].spot;
     }
 
