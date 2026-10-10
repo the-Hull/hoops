@@ -17,6 +17,31 @@
 using Effect = SDK::Message::RequestVibroPlay::Effect;
 using Event  = score::SessionEngine::Event;
 
+namespace {
+
+/// One row of the haptics table (spec §5): the effect per strength, played `count` times.
+struct HapticEntry {
+    Effect  strong;
+    Effect  light;
+    uint8_t count;
+};
+
+/// Indexed by Service::HapticEvent.
+constexpr HapticEntry kHaptics[] = {
+    {Effect::SHARP_CLICK_100,                 Effect::SHARP_TICK_1_100,              1},   // Make
+    {Effect::SHORT_DOUBLE_CLICK_STRONG_1_100, Effect::SHORT_DOUBLE_SHARP_TICK_1_100, 1},   // Miss
+    {Effect::SHARP_TICK_1_100,                Effect::SHARP_TICK_1_100,              3},   // Undo
+    {Effect::ALERT_750MS_100,                 Effect::ALERT_750MS_100,               1},   // Alert
+    {Effect::STRONG_CLICK_100,                Effect::MEDIUM_CLICK_1_100,            1},   // Saved
+    {Effect::DOUBLE_CLICK_100,                Effect::SHORT_DOUBLE_SHARP_TICK_1_100, 1},   // Streak5
+    {Effect::STRONG_CLICK_100,                Effect::MEDIUM_CLICK_1_100,            3},   // Streak10
+};
+static_assert(sizeof(kHaptics) / sizeof(kHaptics[0]) ==
+                  static_cast<size_t>(Service::HapticEvent::Streak10) + 1u,
+              "one haptics row per HapticEvent");
+
+} // namespace
+
 Service::Service(SDK::Kernel& kernel)
     : mKernel(kernel)
     , mStorage(kernel)
@@ -37,6 +62,7 @@ void Service::run()
         LOG_WARNING("sessions/index.bin out of range, starting empty\n");
         mIndex = score::SessionIndex{};
     }
+    if (!mStorage.loadSettings(mSettings) || !mSettings.valid()) mSettings = score::Settings::defaults();
     LOG_INFO("loaded %u workouts, %u sessions\n", mWorkouts.count, mIndex.count);
     restoreCurrent();
 
@@ -57,6 +83,7 @@ void Service::run()
                     LOG_INFO("GUI is now running\n");
                     mGuiStarted = true;
                     if (!mSensorWrist.connect()) LOG_WARNING("wrist motion connect failed\n");
+                    sendSettings();
                     sendLocalTime();
                     pushSnapshot();
                     LOG_INFO("snapshot pushed (state %u)\n", static_cast<unsigned>(mEngine.state()));
@@ -90,6 +117,12 @@ void Service::run()
             ++catchUp;
         }
         mProcessedUtc = utc;
+
+        // Once a minute while the GUI runs: a new local date is sent as LOCAL_TIME.
+        if (mGuiStarted && utc / 60 != mLastMinute) {
+            mLastMinute = utc / 60;
+            if (todayYmd() != mLastYmd) sendLocalTime();
+        }
     }
 }
 
@@ -130,9 +163,22 @@ void Service::handleMessage(SDK::MessageBase* msg)
             const uint16_t before = mEngine.session().count;
             const Event ev = mEngine.shot(made);
             if (mEngine.session().count != before) {
-                vibro(made ? Effect::SHARP_CLICK_100 : Effect::SHORT_DOUBLE_CLICK_STRONG_1_100);
-                backlightOn();
+                if (made) {
+                    const uint8_t streak = mEngine.currentStreak();
+                    haptic(streak == 5                          ? HapticEvent::Streak5
+                           : (streak >= 10 && streak % 10 == 0) ? HapticEvent::Streak10
+                                                                : HapticEvent::Make);
+                } else {
+                    haptic(HapticEvent::Miss);
+                }
+                if (mSettings.backlightOnShot) backlightOn();
                 autosave();
+                // Open session target: once, on the shot that reaches it (spec §2.3).
+                if (mEngine.workout() == nullptr && mSettings.openTarget > 0 &&
+                    mEngine.session().count == mSettings.openTarget) {
+                    haptic(HapticEvent::Alert);
+                    backlightOn();
+                }
             }
             pushSnapshot();
             onEvent(ev);
@@ -142,8 +188,8 @@ void Service::handleMessage(SDK::MessageBase* msg)
             bool made = false;
             const bool ok = mEngine.undo(made);
             if (ok) {
-                vibro(Effect::SHARP_TICK_1_100, 3);
-                backlightOn();
+                haptic(HapticEvent::Undo);
+                if (mSettings.backlightOnShot) backlightOn();
                 autosave();
             }
             sendUndoResult(ok, made);
@@ -165,7 +211,7 @@ void Service::handleMessage(SDK::MessageBase* msg)
 
         case CustomMessage::SKIP_REST:
             if (mEngine.skipRest()) {
-                vibro(Effect::ALERT_750MS_100);
+                haptic(HapticEvent::Alert);
                 backlightOn();
             }
             pushSnapshot();
@@ -236,6 +282,10 @@ void Service::handleMessage(SDK::MessageBase* msg)
             sendHistory();
             break;
 
+        case CustomMessage::SET_SETTINGS:
+            applySettings(static_cast<CustomMessage::SetSettings*>(msg)->settings);
+            break;
+
         default:
             LOG_DEBUG("unhandled message 0x%lx\n", static_cast<unsigned long>(msg->getType()));
             break;
@@ -263,7 +313,7 @@ void Service::pushSnapshot()
 void Service::onEvent(Event ev)
 {
     if (ev == Event::None) return;
-    vibro(Effect::ALERT_750MS_100);
+    haptic(HapticEvent::Alert);
     backlightOn();
     if (ev == Event::RestOver || !mGuiStarted) return;
 
@@ -363,6 +413,29 @@ void Service::sendLocalTime()
     c.sec  = static_cast<uint8_t>(t.tm_sec);
     c.wday = static_cast<uint8_t>(t.tm_wday);
     SDK::send_msg<CustomMessage::LocalTime>(mKernel, c);
+    mLastYmd = static_cast<uint32_t>(c.year * 10000u + c.mon * 100u + c.mday);
+}
+
+void Service::sendSettings()
+{
+    SDK::send_msg<CustomMessage::SettingsMsg>(mKernel, mSettings);
+}
+
+void Service::applySettings(const score::Settings& s)
+{
+    if (!s.valid()) {
+        LOG_WARNING("SET_SETTINGS refused: out of range\n");
+        sendSettings();   // the GUI resyncs to what is in force
+        return;
+    }
+    mSettings = s;
+    if (!mStorage.saveSettings(mSettings)) LOG_WARNING("settings.bin not written\n");
+
+    if (!mSettings.heartRate)
+        mSensorHr.disconnect();
+    else if (mEngine.isActive() && mEngine.state() != score::SessionState::Paused)
+        connectHr();
+    sendSettings();
 }
 
 void Service::finishSession(bool save)
@@ -413,11 +486,19 @@ void Service::finishSession(bool save)
     else
         LOG_WARNING("index not written: current.bin kept for session %lu\n", static_cast<unsigned long>(s.id));
     mLastEndedId = s.id;
-    vibro(Effect::STRONG_CLICK_100);
+    haptic(HapticEvent::Saved);
     backlightOn();
     SDK::send_msg<CustomMessage::Saved>(mKernel, s.id);
     LOG_INFO("session %lu ended: %u shots\n", static_cast<unsigned long>(s.id), s.count);
     pushSnapshot();
+}
+
+void Service::haptic(HapticEvent ev)
+{
+    const auto mode = static_cast<score::Haptics>(mSettings.haptics);
+    if (mode == score::Haptics::Off) return;
+    const HapticEntry& e = kHaptics[static_cast<size_t>(ev)];
+    vibro(mode == score::Haptics::Light ? e.light : e.strong, e.count);
 }
 
 void Service::vibro(Effect effect, uint8_t count, uint16_t silenceMs)
@@ -504,6 +585,7 @@ void Service::autosave()
 
 void Service::connectHr()
 {
+    if (!mSettings.heartRate) return;
     mHrSeen = false;
     if (!mSensorHr.isConnected() && !mSensorHr.connect()) LOG_WARNING("heart rate connect failed\n");
 }
