@@ -5,7 +5,7 @@
  *
  * Menu (docs/mockup-layout.md §1): "Resume session" first while the service
  * reports a session in progress, then Open Session, Workouts, History and
- * Settings (dim, no action yet); with it an amber "Session in progress" line
+ * Settings; with it an amber "Session in progress" line
  * under the header (which moves up for it). UP / DOWN move, SELECT opens, BACK exits
  * the app, or goes to Pause while a session is in progress. The footer
  * "Last · d.m. · pp %" comes from the service's history (newest first).

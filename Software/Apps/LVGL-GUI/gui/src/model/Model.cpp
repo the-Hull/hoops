@@ -93,6 +93,11 @@ void Model::requestHistory()
     SDK::send_msg<CustomMessage::GetHistory>(mKernel);
 }
 
+void Model::clearHistory()
+{
+    SDK::send_msg<CustomMessage::ClearHistory>(mKernel);
+}
+
 void Model::requestSpotStats()
 {
     SDK::send_msg<CustomMessage::GetSpotStats>(mKernel);

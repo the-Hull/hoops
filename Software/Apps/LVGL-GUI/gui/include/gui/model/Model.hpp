@@ -66,6 +66,9 @@ public:
     /// Ask for the whole index; the service streams it in pages of
     /// kTrendCount rows, newest first (onHistory() fires per page).
     void requestHistory();
+    /// Delete every saved session; the service answers with an empty
+    /// HISTORY page (onHistory(), historyTotal() 0) and SPOT_STATS.
+    void clearHistory();
     /// Ask for the per-spot last / best records (onSpotStats()).
     void requestSpotStats();
     void exitApp();

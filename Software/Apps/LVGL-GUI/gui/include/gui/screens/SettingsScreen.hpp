@@ -1,0 +1,82 @@
+/**
+ ******************************************************************************
+ * @file    SettingsScreen.hpp
+ * @brief   The user settings: twelve rows, SELECT steps a row to its next value.
+ *
+ * Spec v2 §2.4. Header "SETTINGS", ListMenu::workoutsGeometry() (circular):
+ * line 1 the setting's name, line 2 (the selected row only) its value.
+ * UP / DOWN move, SELECT = next value (cycles, wraps), BACK = Home. Every
+ * change goes to the service at once (Model::setSettings() from the local
+ * copy mEdit); the SETTINGS echo (onSettings()) overwrites the copy. The
+ * colour scheme row rebuilds the screen through the Model; the selection is
+ * kept in Model::settingsIndex.
+ *
+ * Clear history: line 2 "N sessions" (Model::historyTotal(), requested on
+ * show) or "Nothing to clear"; the first SELECT asks "SELECT again to
+ * confirm" for 3 s, a second one within them sends CLEAR_HISTORY, and the
+ * empty HISTORY page that follows shows the toast "History cleared".
+ * About: "Hoops v<BUILD_VERSION>" ("Hoops dev" without the define).
+ ******************************************************************************
+ */
+
+#ifndef SETTINGS_SCREEN_HPP
+#define SETTINGS_SCREEN_HPP
+
+#include <memory>
+
+#include "score/Settings.hpp"
+
+#include "gui/screens/Screen.hpp"
+#include "gui/widgets/Hints.hpp"
+#include "gui/widgets/KeyInput.hpp"
+#include "gui/widgets/ListMenu.hpp"
+#include "gui/widgets/Toast.hpp"
+
+class SettingsScreen : public Screen
+{
+public:
+    explicit SettingsScreen(Model& model);
+    ~SettingsScreen() override;
+
+    void onShow() override;
+    void onHide() override;
+    void onKey(uint8_t code) override;
+    void onAction(KeyInput::Action a) override;
+
+    void onSettings() override;
+    void onHistory() override;
+    void onSuspend() override;
+
+protected:
+    void build() override;
+
+private:
+    enum Row : uint8_t {
+        kGoalType, kGoalValue, kRest, kOpenTarget, kHoldDown, kHaptics, kBacklight, kHeartRate, kScheme, kCsv,
+        kClear, kAbout, kRowCount
+    };
+
+    static constexpr uint32_t kConfirmMs = 3000;
+
+    /// Step the selected row to its next value and send the settings.
+    void change(uint8_t row);
+    void clearHistory();
+    /// Rewrite every row's value text and redraw the menu.
+    void refresh();
+    void stopConfirm();
+    static void confirmTimerCb(lv_timer_t* t);
+
+    KeyInput                  mKeys;
+    std::unique_ptr<ListMenu> mMenu;
+    std::unique_ptr<Hints>    mHints;
+    std::unique_ptr<Toast>    mToast;
+
+    score::Settings mEdit;
+    ListMenu::Item  mItems[kRowCount]     = {};
+    char            mValue[kRowCount][28] = {};
+    lv_timer_t*     mConfirmTimer         = nullptr;   ///< the "SELECT again" window
+    bool            mAwaitClear           = false;     ///< CLEAR_HISTORY sent, empty page not yet in
+    bool            mCleared              = false;     ///< cleared here: "0 sessions", not "Nothing to clear"
+};
+
+#endif // SETTINGS_SCREEN_HPP

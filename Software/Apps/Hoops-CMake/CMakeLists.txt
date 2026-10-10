@@ -70,6 +70,9 @@ set(GUI_COMPILE_DEFINITIONS
     # screens' widget trees coexist during a switch. The simulator's
     # CMakeLists.txt sets the same.
     "LV_MEM_SIZE=(56U*1024U)"
+    # The Settings screen's About row ("Hoops v<version>"); the service gets
+    # it from the SDK, the GUI does not.
+    "BUILD_VERSION=\"${BUILD_VERSION}\""
 )
 # LVGL's software renderer recurses deeper than TouchGFX; give the GUI task
 # more stack than the 10 KB default.

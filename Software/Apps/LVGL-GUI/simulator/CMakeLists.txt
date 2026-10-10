@@ -69,7 +69,7 @@ target_compile_definitions(HoopsSimulator PRIVATE
     "LV_MEM_SIZE=(56U*1024U)"  # as in Hoops-CMake/CMakeLists.txt
     APP_ID="13F039C6FE024E86"
     DEV_ID="UNA Simulator"
-    BUILD_VERSION="1.0.0-sim"
+    # No BUILD_VERSION: the Settings screen's About row shows "Hoops dev".
 )
 
 find_package(Threads REQUIRED)

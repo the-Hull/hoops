@@ -21,6 +21,7 @@
 #include "gui/screens/PauseScreen.hpp"
 #include "gui/screens/RestScreen.hpp"
 #include "gui/screens/ResultsScreen.hpp"
+#include "gui/screens/SettingsScreen.hpp"
 #include "gui/screens/SpotPickerScreen.hpp"
 #include "gui/screens/StepBuilderScreen.hpp"
 #include "gui/screens/WorkoutPreviewScreen.hpp"
@@ -147,7 +148,7 @@ Screen* ScreenManager::create(ScreenId id)
         case ScreenId::StepBuilder:
             return new StepBuilderScreen(m);
         case ScreenId::Settings:
-            return nullptr;   // no Settings screen yet: switchNow() logs and stays
+            return new SettingsScreen(m);
     }
     return nullptr;
 }

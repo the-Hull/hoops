@@ -105,7 +105,7 @@ void HomeScreen::updateItems()
     add(Action::Open,     "Open Session", Theme::kText);
     add(Action::Workouts, "Workouts",     Theme::kText);
     add(Action::History,  "History",      Theme::kText);
-    add(Action::Settings, "Settings",     Theme::kDim);
+    add(Action::Settings, "Settings",     Theme::kText);
 
     uint16_t sel = 0;
     for (uint8_t i = 0; i < mCount; ++i) {
@@ -156,6 +156,7 @@ void HomeScreen::activate(Action a)
             sm.goTo(ScreenId::History);
             break;
         case Action::Settings:
+            sm.goTo(ScreenId::Settings);
             break;
     }
 }
