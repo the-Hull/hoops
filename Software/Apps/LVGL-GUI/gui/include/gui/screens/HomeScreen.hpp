@@ -9,6 +9,7 @@
  * under the header (which moves up for it). UP / DOWN move, SELECT opens, BACK exits
  * the app, or goes to Pause while a session is in progress. The footer
  * "Last · d.m. · pp %" comes from the service's history (newest first).
+ * Model::homeToast, when set (e.g. "Save failed"), shows as a toast on arrival.
  ******************************************************************************
  */
 
@@ -21,6 +22,7 @@
 #include "gui/widgets/Hints.hpp"
 #include "gui/widgets/KeyInput.hpp"
 #include "gui/widgets/ListMenu.hpp"
+#include "gui/widgets/Toast.hpp"
 
 class HomeScreen : public Screen
 {
@@ -57,6 +59,7 @@ private:
     KeyInput                  mKeys;
     std::unique_ptr<Hints>    mHints;
     std::unique_ptr<ListMenu> mMenu;
+    std::unique_ptr<Toast>    mToast;
     lv_obj_t*                 mFooter = nullptr;
     lv_obj_t*                 mHeader = nullptr;
     lv_obj_t*                 mHint   = nullptr;   ///< "Session in progress"

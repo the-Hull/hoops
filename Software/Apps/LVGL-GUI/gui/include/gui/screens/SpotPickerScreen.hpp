@@ -9,7 +9,9 @@
  * the spot of the running one, or set a workout step's spot. The selection
  * is kept in Model::pickerSpot. The footer shows the selected spot's
  * category in the newest saved session ("Last 3PT · 40 %"), when it has
- * attempts there; per-spot history is not kept.
+ * attempts there; per-spot history is not kept. Starting an open session
+ * while one is in progress (e.g. restored after a crash) is refused with a
+ * "Session in progress" toast.
  ******************************************************************************
  */
 
@@ -25,6 +27,7 @@
 #include "gui/widgets/Hints.hpp"
 #include "gui/widgets/KeyInput.hpp"
 #include "gui/widgets/ListMenu.hpp"
+#include "gui/widgets/Toast.hpp"
 
 class SpotPickerScreen : public Screen
 {
@@ -51,6 +54,7 @@ private:
     std::unique_ptr<Court>    mCourt;
     std::unique_ptr<ListMenu> mMenu;
     std::unique_ptr<Hints>    mHints;
+    std::unique_ptr<Toast>    mToast;
     lv_obj_t*                 mFooter = nullptr;
 
     ListMenu::Item mItems[score::kSpotCount] = {};

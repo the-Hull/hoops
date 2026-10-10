@@ -147,7 +147,8 @@ void setChevron(lv_obj_t* l, bool hidden, bool enabled)
     lv_obj_set_style_line_color(l, Theme::rgb(enabled ? Theme::kAccent : Theme::kLine), LV_PART_MAIN);
 }
 
-const ListMenu::Item kDeleteWorkoutItem = { "Delete workout", nullptr, Theme::kBad };
+const ListMenu::Item kDeleteWorkoutItem    = { "Delete workout", nullptr, Theme::kBad };
+const ListMenu::Item kDeleteWorkoutDimItem = { "Delete workout", nullptr, Theme::kDim };
 const ListMenu::Item kConfirmItem       = { "Delete?", "SELECT again", Theme::kBad };
 
 } // namespace
@@ -428,7 +429,11 @@ void StepBuilderScreen::fillItems()
     }
     add(kDeleteStep, { "Delete step", nullptr, n > 1 ? Theme::kBad : Theme::kDim });
     if (!mModel.draftIsNew) {   // a new draft has nothing stored to delete
-        add(kDeleteWorkout, mConfirming ? kConfirmItem : kDeleteWorkoutItem);
+        if (runningWorkout()) {
+            add(kDeleteWorkout, kDeleteWorkoutDimItem);   // the service would refuse it
+        } else {
+            add(kDeleteWorkout, mConfirming ? kConfirmItem : kDeleteWorkoutItem);
+        }
     }
 }
 
@@ -457,6 +462,9 @@ void StepBuilderScreen::menuSelect()
         case kSave:       save(); break;
         case kDeleteStep: deleteStep(); break;
         case kDeleteWorkout:
+            if (runningWorkout()) {
+                break;   // greyed: the session in progress runs this workout
+            }
             if (!mConfirming) {
                 setConfirm(true);
                 break;
@@ -472,6 +480,11 @@ void StepBuilderScreen::menuSelect()
         default:
             break;
     }
+}
+
+bool StepBuilderScreen::runningWorkout() const
+{
+    return mModel.sessionRunning() && mModel.draft().id != 0 && mModel.snapshot().workoutId == mModel.draft().id;
 }
 
 void StepBuilderScreen::addStep()
@@ -596,7 +609,7 @@ void StepBuilderScreen::toastTimerCb(lv_timer_t* t)
 void StepBuilderScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
-    if (a.kind != KeyInput::Kind::Click || mBusy) {
+    if (!KeyInput::isActivate(a) || mBusy) {
         return;
     }
     if (mMenuOpen) {
@@ -634,14 +647,14 @@ void StepBuilderScreen::onWorkoutSaved(uint8_t id)
     }
     setBusy(false);
     if (id == 0) {
-        // Refused: the store is full (an add) or the workout is gone.
-        toast(mModel.draftIsNew ? "Store full (10)" : "Save failed");
+        // Refused: the store is full (an add), the workout is gone, or its
+        // steps were out of range.
+        toast("Not saved");
         return;
     }
-    // The list held is stale now: mark it so (the service sends the fresh
-    // one after WORKOUT_SAVED), and the preview waits for it.
+    // The Model marked the list held stale on WORKOUT_SAVED (the service
+    // streams the fresh one right after it), so the preview waits for it.
     mModel.selectedWorkoutId = id;
-    mModel.requestWorkouts();
     ScreenManager::instance().goTo(ScreenId::WorkoutPreview);
 }
 

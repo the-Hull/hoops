@@ -69,6 +69,11 @@ public:
     // --- State (latest from the service) ------------------------------------
     bool hasSnapshot() const { return mHasSnapshot; }
     const score::Snapshot& snapshot() const { return mSnapshot; }
+    /// The latest snapshot shows a session in progress (Active, Paused or Rest).
+    bool sessionRunning() const
+    {
+        return mHasSnapshot && score::isRunning(static_cast<score::SessionState>(mSnapshot.state));
+    }
 
     uint8_t userWorkoutCount() const { return mUserCount; }
     const score::Workout& userWorkout(uint8_t i) const;
@@ -76,8 +81,6 @@ public:
 
     /// A preset or a user workout (from the list held) by id; nullptr if none.
     const score::Workout* workoutById(uint8_t id) const;
-    /// "Open" for 0, the workout's name, or "Custom" for an id not known.
-    const char* workoutName(uint8_t id) const;
 
     /// The last STEP_DONE of the running workout; hasStepDone() is false
     /// until one arrives, and again after startWorkout() / startOpen().
@@ -116,6 +119,10 @@ public:
     /// again; that screen then ignores Paused snapshots until a live one
     /// (they predate the resume) and clears it.
     bool resumeEntry = false;
+
+    /// A message for the Home screen to show once on arrival (a toast), e.g.
+    /// "Save failed" after End & save; Home clears it. A string literal.
+    const char* homeToast = nullptr;
 
     score::Workout& draft() { return mDraft; }
     uint8_t draftStep  = 0;

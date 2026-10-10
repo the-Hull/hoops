@@ -11,6 +11,13 @@
  * change spot, on the button's release so that release cannot reach the
  * picker (in a workout a hold pauses, like a click). While DOWN is held
  * past the hold time a toast says "Release to change spot"; any key hides it.
+ * A long press of SELECT / BACK / UP counts like a click (KeyInput's
+ * HoldRelease).
+ *
+ * Snapshots that still show the state we came from are ignored until the
+ * first live (Active / Rest) one; if none arrives within kLiveWaitMs of
+ * onShow() the screen goes where the latest snapshot says (Pause, Rest or
+ * Home), so a refused start can never leave it logging into nothing.
  *
  * rebuild() branches on Snapshot::mode; both layouts share the number
  * group, the percentage and the footer (showBody()). A finished workout
@@ -46,6 +53,7 @@ public:
     static constexpr uint32_t kToastMs     = 2000;   ///< undo
     static constexpr uint32_t kStepToastMs = 1500;   ///< step done, no rest
     static constexpr uint32_t kHoldToastMs = 10000;  ///< "Release to change spot", until a key
+    static constexpr uint32_t kLiveWaitMs  = 1500;   ///< first live snapshot backstop
 
 protected:
     void build() override;
@@ -54,7 +62,10 @@ private:
     static constexpr uint8_t kLast5 = 5;
 
     static void toastTimerCb(lv_timer_t* t);
+    static void liveTimerCb(lv_timer_t* t);
     static void onHold(void* ctx, KeyInput::Action a);
+
+    void stopLiveTimer();
 
     void changeSpot();
     void pauseNow();
@@ -99,6 +110,7 @@ private:
     lv_obj_t* mToast   = nullptr;
     lv_obj_t* mToastText = nullptr;
     lv_timer_t* mToastTimer = nullptr;
+    lv_timer_t* mLiveTimer  = nullptr;   ///< kLiveWaitMs after onShow()
     bool        mHoldToast  = false;   ///< the toast shown is the hold hint
     bool        mWorkoutLayout = false;
 

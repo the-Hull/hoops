@@ -592,7 +592,7 @@ void ResultsScreen::step(int8_t dir)
 void ResultsScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
-    if (a.kind != KeyInput::Kind::Click) {
+    if (!KeyInput::isActivate(a)) {
         return;
     }
     if (a.btn == KeyInput::Btn::Back) {

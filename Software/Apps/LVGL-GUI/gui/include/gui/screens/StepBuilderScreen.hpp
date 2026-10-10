@@ -10,13 +10,14 @@
  * stop at the ends). SELECT moves on: on Spot it opens the full SpotPicker
  * (which comes back on Goal type), after Rest a mini-menu: Add step / Save
  * workout / Next step (on any step but the last) / Delete step / Delete
- * workout (asked twice; a stored workout only). BACK goes a field back, to the previous step's Rest, or on the
+ * workout (asked twice; a stored workout only, greyed while a session runs
+ * it). BACK goes a field back, to the previous step's Rest, or on the
  * first field of the first step drops the draft and returns to the list.
  *
  * Nothing reaches the service before Save: SAVE_WORKOUT is answered by
- * WORKOUT_SAVED (id 0 = refused, e.g. a full store; a toast then says so)
+ * WORKOUT_SAVED (id 0 = refused, e.g. a full store; a "Not saved" toast)
  * and the refreshed list. On an id the preview of the saved workout opens;
- * the list held is marked stale first (requestWorkouts()), so the preview
+ * the Model marks the list held stale on WORKOUT_SAVED, so the preview
  * waits for the fresh one rather than show the workout as it was. Keys are
  * ignored while a SAVE / DELETE is out; after kBusyMs without a reply they
  * come back with a "No reply" toast.
@@ -75,6 +76,8 @@ private:
     void goToStep(uint8_t index, uint8_t field);
     void save();
     void setConfirm(bool on);
+    /// The draft is the workout of the session in progress (not deletable).
+    bool runningWorkout() const;
     /// mBusy, with the kBusyMs watchdog that clears it.
     void setBusy(bool on);
     void toast(const char* text);

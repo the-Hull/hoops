@@ -99,8 +99,10 @@ void ScreenManager::switchNow(ScreenId id)
     mModel->bind(next);
     next->onShow();
 
+#if defined(SIMULATOR) || (LOG_LEVEL >= LOG_LEVEL_DEBUG && LOG_MODULE_LEVEL >= LOG_LEVEL_DEBUG)
     // Peak use of LVGL's static pool (LV_MEM_SIZE), logged per screen so the
-    // pool can be sized to what the app actually needs.
+    // pool can be sized to what the app actually needs. A development aid:
+    // on the watch only when this module logs at DEBUG.
     lv_mem_monitor_t mon;
     lv_mem_monitor(&mon);
     LOG_INFO("LVGL pool: %u/%u B used, peak %u%%, frag %u%% (screen %u)\n",
@@ -109,6 +111,7 @@ void ScreenManager::switchNow(ScreenId id)
              static_cast<unsigned>(mon.max_used) * 100u / static_cast<unsigned>(mon.total_size),
              static_cast<unsigned>(mon.frag_pct),
              static_cast<unsigned>(id));
+#endif
 }
 
 Screen* ScreenManager::create(ScreenId id)

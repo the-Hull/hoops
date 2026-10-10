@@ -75,6 +75,20 @@ bool pickerOnCurrentSpot(const Model& m)
 }
 
 bool backOnActive(const Model&) { return onScreen(ScreenId::Active); }
+
+// Session 1 after make, make, make, miss, undo (3/3) and a 600 ms SELECT
+// press: the long press (KeyInput HoldRelease) counted a make.
+bool heldMake(const Model& m)
+{
+    return onScreen(ScreenId::Active) && m.hasSnapshot() && m.snapshot().totalMakes == 4
+        && m.snapshot().totalAttempts == 4 && visibleLabel("/4");
+}
+
+// End & save on a session without shots: dropped (SAVED 0), Home says so.
+bool emptyNotSaved(const Model& m)
+{
+    return onScreen(ScreenId::Home) && !m.sessionRunning() && visibleLabel("Nothing to save");
+}
 bool onPause(const Model&)      { return onScreen(ScreenId::Pause); }
 bool onResults(const Model&)    { return onScreen(ScreenId::Results); }
 bool onHome(const Model&)       { return onScreen(ScreenId::Home); }
@@ -519,7 +533,10 @@ const Step kSteps[] = {
     {  400, nullptr, nullptr, '3', "Active: make" },
     {  400, nullptr, nullptr, '4', "Active: miss" },
     {  600, nullptr, nullptr, '1', "Active: undo (toast)" },
-    { 2500, nullptr, nullptr, 'w', "Active: DOWN press" },
+    { 2500, nullptr, nullptr, 'e', "Active: SELECT press (slow)" },
+    {  600, nullptr, nullptr, 'd', "Active: SELECT release after 600 ms (HoldRelease)" },
+    {  600, heldMake, "a 600 ms SELECT press counted a make: 4/4",
+                             'w', "Active: DOWN press" },
     {  600, holdHint, "hold fired: still on Active, toast Release to change spot",
                              's', "Active: DOWN release after the hold -> SpotPicker (change spot)" },
     {  600, pickerOnCurrentSpot, "picker open in ChangeSpot mode on the current spot",
@@ -548,6 +565,13 @@ const Step kSteps[] = {
                              '3', "Pause: SELECT after the 3 s window -> confirm again" },
     {  500, nullptr, nullptr, '3', "Pause: SELECT -> discard, Home" },
     { 1500, onHome, "on Home after discard",
+                             '3', "Home: SELECT Open Session -> SpotPicker" },
+    // An empty session: End & save drops it (SAVED 0) and Home says so.
+    {  500, nullptr, nullptr, '3', "SpotPicker: SELECT -> startOpen, Active" },
+    { 1000, nullptr, nullptr, '2', "Active: DOWN -> pause, Pause (no shots)" },
+    {  800, nullptr, nullptr, '2', "Pause: DOWN -> End & save" },
+    {  500, nullptr, nullptr, '3', "Pause: SELECT End & save -> SAVED 0 -> Home" },
+    { 1000, emptyNotSaved, "empty session not saved: Home, toast Nothing to save",
                              '3', "Home: SELECT Open Session -> SpotPicker" },
     // Session 3: three spots in three categories, a 3-make streak, End & save.
     {  500, nullptr, nullptr, '3', "SpotPicker: SELECT (3PT Top) -> Active" },
@@ -910,6 +934,21 @@ bool p2Home(const Model& m)
         && menuSelected("Resume session") && visibleLabel("Session in progress")
         && onScreenLabel("Session in progress", Theme::kAmber);
 }
+bool p2Paused35(const Model& m)
+{
+    return m.hasSnapshot() && m.snapshot().state == static_cast<uint8_t>(score::SessionState::Paused)
+        && openCounts(m, 3, 5);
+}
+// No second session while the restored one is in progress.
+bool p2PickerRefused(const Model& m)
+{
+    return onScreen(ScreenId::SpotPicker) && visibleLabel("Session in progress") && p2Paused35(m);
+}
+bool p2PreviewRefused(const Model& m)
+{
+    return onScreen(ScreenId::WorkoutPreview) && visibleLabel("Session in progress") && p2Paused35(m);
+}
+bool p2HomeResume(const Model& m) { return onHome(m) && menuSelected("Resume session") && p2Paused35(m); }
 bool p2Pause(const Model& m)
 {
     return onPause(m) && openCounts(m, 3, 5) && onScreenLabel(" - 3/5 - 60 %", 0, true);
@@ -929,6 +968,21 @@ bool p2Clean(const Model& m)
 const Step kPhase2[] = {
     { 1500, p2Home, "phase 2: Home first item Resume session (selected), Session in progress (amber); "
                     "Paused, kResumable, 3/5",
+                             '2', "Home: DOWN (Open Session)" },
+    {  400, nullptr, nullptr, '3', "Home: SELECT Open Session -> SpotPicker" },
+    {  800, nullptr, nullptr, '3', "SpotPicker: SELECT while a session is in progress" },
+    {  400, p2PickerRefused, "phase 2: open start refused: toast Session in progress, still on the picker, Paused 3/5",
+                             '4', "SpotPicker: BACK -> Home" },
+    {  800, p2HomeResume, "phase 2: back on Home, Resume session selected",
+                             '2', "Home: DOWN (Open Session)" },
+    {  400, nullptr, nullptr, '2', "Home: DOWN (Workouts)" },
+    {  400, nullptr, nullptr, '3', "Home: SELECT -> Workouts" },
+    {  800, nullptr, nullptr, '3', "Workouts: SELECT (Around the World) -> Preview" },
+    {  800, nullptr, nullptr, '3', "Preview: SELECT START while a session is in progress" },
+    {  400, p2PreviewRefused, "phase 2: START refused: toast Session in progress, still on Preview, Paused 3/5",
+                             '4', "Preview: BACK -> Workouts" },
+    {  800, nullptr, nullptr, '4', "Workouts: BACK -> Home" },
+    {  800, p2HomeResume, "phase 2: Home again, Resume session selected",
                              '3', "Home: SELECT Resume session -> Pause" },
     { 1000, p2Pause, "phase 2: Pause shows the restored 3/5 - 60 %",
                              '3', "Pause: SELECT Resume -> Active" },

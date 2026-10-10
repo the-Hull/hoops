@@ -52,6 +52,7 @@ void SpotPickerScreen::build()
 
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Dot, Hints::Dot, Hints::Dot, Hints::Dot);
+    mToast = std::make_unique<Toast>(mRoot);
 
     showSelection();
 }
@@ -106,6 +107,11 @@ void SpotPickerScreen::select()
     ScreenManager& sm  = ScreenManager::instance();
     switch (mModel.pickerMode) {
         case Model::PickerMode::StartOpen:
+            if (mModel.sessionRunning()) {
+                // One session at a time: the service would refuse the start.
+                mToast->show("Session in progress");
+                break;
+            }
             mModel.startOpen(spot);
             sm.goTo(ScreenId::Active);
             break;
@@ -136,7 +142,7 @@ void SpotPickerScreen::back()
 void SpotPickerScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
-    if (a.kind != KeyInput::Kind::Click) {
+    if (!KeyInput::isActivate(a)) {
         return;
     }
     switch (a.btn) {

@@ -46,6 +46,7 @@ PauseScreen::~PauseScreen()
         lv_timer_delete(mConfirmTimer);
         mConfirmTimer = nullptr;
     }
+    stopEndTimer();
 }
 
 void PauseScreen::build()
@@ -64,6 +65,7 @@ void PauseScreen::build()
 
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Dot, Hints::Dot, Hints::Dot, Hints::Dot);
+    mToast = std::make_unique<Toast>(mRoot);
 
     if (mModel.hasSnapshot()) {
         show(mModel.snapshot());
@@ -127,6 +129,33 @@ void PauseScreen::confirmTimerCb(lv_timer_t* t)
     static_cast<PauseScreen*>(lv_timer_get_user_data(t))->setConfirm(false);   // deletes the timer
 }
 
+void PauseScreen::endAndSave()
+{
+    mEnding   = true;
+    mEndEmpty = mModel.hasSnapshot() && mModel.snapshot().totalAttempts == 0;
+    mModel.endSession(true);   // SAVED -> onSaved() -> Results
+    stopEndTimer();
+    mEndTimer = lv_timer_create(&PauseScreen::endTimerCb, kEndMs, this);
+}
+
+void PauseScreen::stopEndTimer()
+{
+    if (mEndTimer) {
+        lv_timer_delete(mEndTimer);
+        mEndTimer = nullptr;
+    }
+}
+
+void PauseScreen::endTimerCb(lv_timer_t* t)
+{
+    // No SAVED in time (e.g. the message was lost): give the keys back
+    // rather than leave the screen dead.
+    auto* self = static_cast<PauseScreen*>(lv_timer_get_user_data(t));
+    self->stopEndTimer();
+    self->mEnding = false;
+    self->mToast->show("No reply");
+}
+
 void PauseScreen::select()
 {
     switch (mMenu->selected()) {
@@ -134,8 +163,7 @@ void PauseScreen::select()
             resume();
             break;
         case kEndSave:
-            mEnding = true;
-            mModel.endSession(true);   // SAVED -> onSaved() -> Results
+            endAndSave();
             break;
         case kDiscard:
             if (!mConfirming) {
@@ -155,7 +183,7 @@ void PauseScreen::select()
 void PauseScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
-    if (a.kind != KeyInput::Kind::Click || mEnding) {
+    if (!KeyInput::isActivate(a) || mEnding) {
         return;
     }
     switch (a.btn) {
@@ -210,9 +238,15 @@ void PauseScreen::onSnapshot(const score::Snapshot& s)
 
 void PauseScreen::onSaved(uint32_t id)
 {
-    (void)id;
+    stopEndTimer();
+    mSaved = true;
+    if (id == 0) {
+        // Nothing stored: an empty session (dropped), or the save failed.
+        mModel.homeToast = mEndEmpty ? "Nothing to save" : "Save failed";
+        ScreenManager::instance().goTo(ScreenId::Home);
+        return;
+    }
     // Results requests the session just ended (GET_RESULTS 0) on show.
-    mSaved              = true;
     mModel.resultsFrom  = Model::ResultsFrom::Session;
     mModel.resultsPage  = 0;
     mModel.clearResults();

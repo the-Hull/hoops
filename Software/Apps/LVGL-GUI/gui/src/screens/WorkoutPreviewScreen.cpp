@@ -65,6 +65,7 @@ void WorkoutPreviewScreen::build()
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Off, Hints::Dot, Hints::Make, Hints::Dot);
     mShown = show();
+    mToast = std::make_unique<Toast>(mRoot);   // last: on top of the rows
 }
 
 void WorkoutPreviewScreen::onShow()
@@ -174,16 +175,21 @@ void WorkoutPreviewScreen::edit()
 void WorkoutPreviewScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
-    if (a.kind != KeyInput::Kind::Click) {
+    if (!KeyInput::isActivate(a)) {
         return;
     }
     ScreenManager& sm = ScreenManager::instance();
     switch (a.btn) {
         case KeyInput::Btn::Select:
-            if (mShown) {
-                mModel.startWorkout(mModel.selectedWorkoutId);
-                sm.goTo(ScreenId::Active);
+            if (!mShown) {
+                break;
             }
+            if (mModel.sessionRunning()) {
+                mToast->show("Session in progress");   // the service would refuse it
+                break;
+            }
+            mModel.startWorkout(mModel.selectedWorkoutId);
+            sm.goTo(ScreenId::Active);
             break;
         case KeyInput::Btn::Down:   edit(); break;
         case KeyInput::Btn::Back:   sm.goTo(ScreenId::Workouts); break;

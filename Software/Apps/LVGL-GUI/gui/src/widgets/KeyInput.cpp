@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    KeyInput.cpp
- * @brief   Press / release / click codes -> Click and Hold actions.
+ * @brief   Press / release / click codes -> Click, Hold and HoldRelease actions.
  ******************************************************************************
  */
 
@@ -71,27 +71,35 @@ KeyInput::Action KeyInput::feed(uint8_t code)
     switch (d.code) {
         case Code::Press:
             stopTimer();
-            mPressed   = d.btn;
-            mSuppress  = Btn::None;
-            mHoldFired = false;
-            mTimer     = lv_timer_create(&KeyInput::timerCb, kHoldMs, this);
+            mPressed  = d.btn;
+            mSuppress = Btn::None;
+            mClicked  = false;
+            mTimer    = lv_timer_create(&KeyInput::timerCb, kHoldMs, this);
             return kNone;
 
         case Code::Release:
-            if (d.btn == mPressed) {
-                stopTimer();
-                mPressed = Btn::None;
-                if (mHoldFired) {
-                    mHoldFired = false;
-                    return { Kind::HoldRelease, d.btn };
-                }
+            if (d.btn != mPressed) {
+                return kNone;   // pressed on another screen, or a stray release
             }
-            return kNone;
+            stopTimer();
+            mPressed  = Btn::None;
+            mSuppress = Btn::None;   // the CLICK, if any, came before this RELEASE
+            if (mClicked) {
+                mClicked = false;
+                return kNone;
+            }
+            // No Click for this press: a hold, or a press the kernel did not
+            // count as a click. Either way it ends here, once.
+            return { Kind::HoldRelease, d.btn };
 
         case Code::Click:
             if (d.btn == mSuppress) {
-                mSuppress = Btn::None;
+                mSuppress = Btn::None;   // the Hold fired: the RELEASE reports this press
                 return kNone;
+            }
+            if (d.btn == mPressed) {
+                mClicked = true;
+                stopTimer();   // the press is over; no Hold may follow its Click
             }
             return { Kind::Click, d.btn };
 
@@ -104,8 +112,9 @@ KeyInput::Action KeyInput::feed(uint8_t code)
 void KeyInput::cancel()
 {
     stopTimer();
-    mPressed   = Btn::None;
-    mHoldFired = false;
+    mPressed  = Btn::None;
+    mSuppress = Btn::None;
+    mClicked  = false;
 }
 
 void KeyInput::stopTimer()
@@ -120,10 +129,9 @@ void KeyInput::timerCb(lv_timer_t* t)
 {
     auto* self = static_cast<KeyInput*>(lv_timer_get_user_data(t));
     self->stopTimer();   // one shot; deleting a timer from its own callback is allowed
-    if (self->mPressed == Btn::None) {
+    if (self->mPressed == Btn::None || self->mClicked) {
         return;
     }
-    self->mHoldFired = true;
     self->mSuppress  = self->mPressed;
     self->mPending   = { Kind::Hold, self->mPressed };
     if (self->mCb) {

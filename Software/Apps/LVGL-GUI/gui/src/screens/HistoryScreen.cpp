@@ -132,7 +132,7 @@ void HistoryScreen::open()
 void HistoryScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
-    if (a.kind != KeyInput::Kind::Click) {
+    if (!KeyInput::isActivate(a)) {
         return;
     }
     switch (a.btn) {

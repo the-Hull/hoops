@@ -117,15 +117,6 @@ const score::Workout* Model::workoutById(uint8_t id) const
     return nullptr;
 }
 
-const char* Model::workoutName(uint8_t id) const
-{
-    if (id == 0) {
-        return "Open";
-    }
-    const score::Workout* w = workoutById(id);
-    return w ? w->name : "Custom";
-}
-
 uint32_t Model::todayYmd() const
 {
     if (mTime.tm_year + 1900 < 2020) {
@@ -283,6 +274,9 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
             break;
 
         case CustomMessage::WORKOUT_SAVED:
+            // The service streams the whole list right after this: the one
+            // held is stale until it is in (onWorkouts()).
+            mWorkoutsLoaded = false;
             l->onWorkoutSaved(static_cast<CustomMessage::WorkoutSaved*>(message)->workoutId);
             break;
 

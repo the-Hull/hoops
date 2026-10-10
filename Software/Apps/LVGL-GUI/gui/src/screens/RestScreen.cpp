@@ -55,6 +55,11 @@ RestScreen::RestScreen(Model& model)
 {
 }
 
+RestScreen::~RestScreen()
+{
+    stopEndTimer();
+}
+
 void RestScreen::build()
 {
     mRing = std::make_unique<Ring>(mRoot);
@@ -63,6 +68,7 @@ void RestScreen::build()
     mCountdown = Theme::label(mRoot, Font::SemiBold60, "", 20, Theme::topFor(Font::SemiBold60, kCountdownY), 200);
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Dot, Hints::PauseIcon, Hints::Dot, Hints::Off);
+    mToast = std::make_unique<Toast>(mRoot);
     buildContent();
 }
 
@@ -246,14 +252,34 @@ void RestScreen::showCountdown(uint16_t remaining)
 
 void RestScreen::save()
 {
-    mEnding = true;
+    mEnding   = true;
+    mEndEmpty = mModel.hasSnapshot() && mModel.snapshot().totalAttempts == 0;
     mModel.endSession(true);   // SAVED -> onSaved() -> Results
+    stopEndTimer();
+    mEndTimer = lv_timer_create(&RestScreen::endTimerCb, kEndMs, this);
+}
+
+void RestScreen::stopEndTimer()
+{
+    if (mEndTimer) {
+        lv_timer_delete(mEndTimer);
+        mEndTimer = nullptr;
+    }
+}
+
+void RestScreen::endTimerCb(lv_timer_t* t)
+{
+    // No SAVED in time: give the keys back (as PauseScreen).
+    auto* self = static_cast<RestScreen*>(lv_timer_get_user_data(t));
+    self->stopEndTimer();
+    self->mEnding = false;
+    self->mToast->show("No reply");
 }
 
 void RestScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
-    if (a.kind != KeyInput::Kind::Click || mEnding) {
+    if (!KeyInput::isActivate(a) || mEnding) {
         return;
     }
     ScreenManager& sm = ScreenManager::instance();
@@ -323,9 +349,15 @@ void RestScreen::onStepDone(const CustomMessage::StepDone& d)
 
 void RestScreen::onSaved(uint32_t id)
 {
-    (void)id;
+    stopEndTimer();
+    mSaved = true;
+    if (id == 0) {
+        // Nothing stored: no shots (a Time-only workout), or the save failed.
+        mModel.homeToast = mEndEmpty ? "Nothing to save" : "Save failed";
+        ScreenManager::instance().goTo(ScreenId::Home);
+        return;
+    }
     // As PauseScreen's End & save: Results requests the session just ended.
-    mSaved             = true;
     mModel.resultsFrom = Model::ResultsFrom::Session;
     mModel.resultsPage = 0;
     mModel.clearResults();

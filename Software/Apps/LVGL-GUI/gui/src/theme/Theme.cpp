@@ -43,11 +43,12 @@ uint32_t pctColor(uint16_t makes, uint16_t attempts)
     if (attempts == 0) {
         return kDim;
     }
-    const uint32_t m100 = static_cast<uint32_t>(makes) * 100u;
-    if (m100 >= 50u * attempts) {
+    // The rounded percentage the text shows (fmtPct), so "50 %" is never amber.
+    const uint8_t p = score::pct(makes, attempts);
+    if (p >= 50u) {
         return kGood;
     }
-    if (m100 >= 35u * attempts) {
+    if (p >= 35u) {
         return kAmber;
     }
     return kBad;

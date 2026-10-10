@@ -11,6 +11,7 @@
  * five at 20 px; with more steps the fifth row reads "+ n more".
  * A user workout whose list is still on its way (just saved in the step
  * builder: the one held may be stale) shows "Loading..." until onWorkouts().
+ * START while a session is in progress shows a "Session in progress" toast.
  ******************************************************************************
  */
 
@@ -22,6 +23,7 @@
 #include "gui/screens/Screen.hpp"
 #include "gui/widgets/Hints.hpp"
 #include "gui/widgets/KeyInput.hpp"
+#include "gui/widgets/Toast.hpp"
 
 class WorkoutPreviewScreen : public Screen
 {
@@ -45,6 +47,7 @@ private:
 
     KeyInput               mKeys;
     std::unique_ptr<Hints> mHints;
+    std::unique_ptr<Toast> mToast;
     lv_obj_t*              mContent = nullptr;
     bool                   mShown   = false;   ///< show() drew the workout: START / edit allowed
 };

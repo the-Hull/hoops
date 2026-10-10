@@ -49,8 +49,8 @@ constexpr uint32_t kAmber  = SDK::GUI::Color::YELLOW_DARK;
 constexpr uint32_t kBg     = SDK::GUI::Color::BLACK;
 
 /// Colour for a shooting percentage: kGood >= 50 %, kAmber 35-49 %, kBad
-/// < 35 %; kDim with no attempts. A threshold lookup only: the percentages
-/// themselves come from the service.
+/// < 35 %; kDim with no attempts. Thresholds on the rounded percentage
+/// score::pct() (as fmtPct() prints it), so colour and text always agree.
 uint32_t pctColor(uint16_t makes, uint16_t attempts);
 
 // The SDK's drawing helpers, under the app's name for them.

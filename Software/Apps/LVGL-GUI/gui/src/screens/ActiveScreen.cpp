@@ -66,6 +66,7 @@ ActiveScreen::~ActiveScreen()
         lv_timer_delete(mToastTimer);
         mToastTimer = nullptr;
     }
+    stopLiveTimer();
 }
 
 void ActiveScreen::build()
@@ -136,6 +137,42 @@ void ActiveScreen::onShow()
         rebuild(mModel.snapshot());
     }
     mModel.requestSnapshot();
+    stopLiveTimer();
+    mLiveTimer = lv_timer_create(&ActiveScreen::liveTimerCb, kLiveWaitMs, this);
+}
+
+void ActiveScreen::stopLiveTimer()
+{
+    if (mLiveTimer) {
+        lv_timer_delete(mLiveTimer);
+        mLiveTimer = nullptr;
+    }
+}
+
+void ActiveScreen::liveTimerCb(lv_timer_t* t)
+{
+    // Backstop: the snapshots ignored as "sent before our intent" may be all
+    // there is (e.g. a START refused because a session already runs, which
+    // leaves the old Paused one). No live one in kLiveWaitMs: go where the
+    // last snapshot says instead of logging shots into nothing.
+    auto* self = static_cast<ActiveScreen*>(lv_timer_get_user_data(t));
+    self->stopLiveTimer();   // one shot
+    if (self->mLiveSeen) {
+        return;
+    }
+    Model& m = self->mModel;
+    m.requestSnapshot();
+    const auto st = m.hasSnapshot() ? static_cast<score::SessionState>(m.snapshot().state) : score::SessionState::Idle;
+    ScreenManager& sm = ScreenManager::instance();
+    switch (st) {
+        case score::SessionState::Active:
+            self->mLiveSeen = true;   // running, and nothing says it predates us
+            self->rebuild(m.snapshot());
+            break;
+        case score::SessionState::Rest:   sm.goTo(ScreenId::Rest); break;
+        case score::SessionState::Paused: sm.goTo(ScreenId::Pause); break;
+        default:                          sm.goTo(ScreenId::Home); break;
+    }
 }
 
 // --- Drawing -----------------------------------------------------------------
@@ -447,6 +484,9 @@ void ActiveScreen::onKey(uint8_t code)
         hideToast();   // any key ends the hold hint: the release, or another button
     }
     const KeyInput::Action a = mKeys.feed(code);
+    if (!KeyInput::isActivate(a)) {
+        return;
+    }
     if (a.kind == KeyInput::Kind::HoldRelease && a.btn == KeyInput::Btn::Down) {
         // Open session: change spot. A workout has no spot to change, so a
         // hold pauses like a click.
@@ -457,9 +497,8 @@ void ActiveScreen::onKey(uint8_t code)
         }
         return;
     }
-    if (a.kind != KeyInput::Kind::Click) {
-        return;
-    }
+    // A slow press of SELECT / BACK / UP (HoldRelease) still logs its shot
+    // or undo: it must not be lost.
     switch (a.btn) {
         case KeyInput::Btn::Select: mModel.shot(true); break;
         case KeyInput::Btn::Back:   mModel.shot(false); break;

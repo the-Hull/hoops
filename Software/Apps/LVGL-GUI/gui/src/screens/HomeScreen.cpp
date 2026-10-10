@@ -44,6 +44,7 @@ void HomeScreen::build()
 
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Off, Hints::Off, Hints::Dot, Hints::Dot);
+    mToast = std::make_unique<Toast>(mRoot);
 
     updateItems();
     updateFooter();
@@ -51,6 +52,10 @@ void HomeScreen::build()
 
 void HomeScreen::onShow()
 {
+    if (mModel.homeToast) {
+        mToast->show(mModel.homeToast);
+        mModel.homeToast = nullptr;
+    }
     mModel.requestSnapshot();
     mModel.requestHistory();
 }
@@ -158,7 +163,7 @@ void HomeScreen::activate(Action a)
 void HomeScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
-    if (a.kind != KeyInput::Kind::Click) {
+    if (!KeyInput::isActivate(a)) {
         return;
     }
     switch (a.btn) {
