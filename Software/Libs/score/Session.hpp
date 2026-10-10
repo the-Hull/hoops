@@ -22,6 +22,12 @@ static_assert(std::has_unique_object_representations<Shot>::value, "Shot: no pad
 
 enum class SessionState : uint8_t { Idle, Active, Paused, Rest, Ended };
 
+/// A session is in progress: Active, Paused or in Rest.
+constexpr bool isRunning(SessionState s)
+{
+    return s == SessionState::Active || s == SessionState::Paused || s == SessionState::Rest;
+}
+
 struct Session {
     uint32_t id;
     uint16_t workoutId;        ///< 0 = free shooting

@@ -30,7 +30,6 @@ protected:
     void build() override;
 
 private:
-    static void holdCb(void* ctx, KeyInput::Action a);
 
     KeyInput               mKeys;
     std::unique_ptr<Hints> mHints;

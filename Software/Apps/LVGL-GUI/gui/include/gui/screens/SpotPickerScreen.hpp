@@ -7,7 +7,9 @@
  * teal, and the spot wheel below it. UP / DOWN move (circular). What SELECT
  * and BACK do depends on Model::pickerMode: start an open session, change
  * the spot of the running one, or set a workout step's spot. The selection
- * is kept in Model::pickerSpot.
+ * is kept in Model::pickerSpot. The footer shows the selected spot's
+ * category in the newest saved session ("Last 3PT · 40 %"), when it has
+ * attempts there; per-spot history is not kept.
  ******************************************************************************
  */
 
@@ -29,17 +31,19 @@ class SpotPickerScreen : public Screen
 public:
     explicit SpotPickerScreen(Model& model);
 
+    void onShow() override;
     void onKey(uint8_t code) override;
+    void onHistory() override;
     void onSuspend() override;
 
 protected:
     void build() override;
 
 private:
-    static void holdCb(void* ctx, KeyInput::Action a);
 
     /// Court highlight and Model::pickerSpot follow the list selection.
     void showSelection();
+    void updateFooter();
     void select();
     void back();
 
@@ -47,6 +51,7 @@ private:
     std::unique_ptr<Court>    mCourt;
     std::unique_ptr<ListMenu> mMenu;
     std::unique_ptr<Hints>    mHints;
+    lv_obj_t*                 mFooter = nullptr;
 
     ListMenu::Item mItems[score::kSpotCount] = {};
     uint8_t        mShown = Court::kNone;   ///< spot currently drawn as selected

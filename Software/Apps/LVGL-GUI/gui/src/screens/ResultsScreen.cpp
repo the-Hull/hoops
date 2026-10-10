@@ -12,15 +12,8 @@
 
 ResultsScreen::ResultsScreen(Model& model)
     : Screen(model)
-    , mKeys(&ResultsScreen::holdCb, this)
+    , mKeys(&KeyInput::noHold, nullptr)
 {
-}
-
-void ResultsScreen::holdCb(void* ctx, KeyInput::Action a)
-{
-    // No hold actions here; the callback is set so none is reported lost.
-    (void)ctx;
-    (void)a;
 }
 
 void ResultsScreen::build()

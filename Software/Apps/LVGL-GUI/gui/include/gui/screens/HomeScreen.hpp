@@ -43,7 +43,6 @@ private:
 
     static constexpr uint8_t kMaxItems = 5;
 
-    static void holdCb(void* ctx, KeyInput::Action a);
 
     /// True while the service reports a session Active, Paused or in Rest.
     bool sessionInProgress() const;

@@ -6,7 +6,8 @@
  * docs/mockup-layout.md §6 (open session) and §8 (undo toast). Everything
  * shown comes from the service's Snapshot; the screen counts nothing itself.
  * Keys: SELECT make, BACK miss, UP undo, DOWN pause; holding DOWN in an
- * open session opens the spot picker to change spot.
+ * open session opens the spot picker to change spot, on the button's
+ * release so that release cannot reach the picker.
  *
  * rebuild() branches on Snapshot::mode; the workout layout (§7) is added by
  * a later task in rebuildWorkout().
@@ -44,10 +45,9 @@ protected:
 private:
     static constexpr uint8_t kLast5 = 5;
 
-    static void holdCb(void* ctx, KeyInput::Action a);
     static void toastTimerCb(lv_timer_t* t);
 
-    void onHold(KeyInput::Btn btn);
+    void changeSpot();
 
     /// Redraw everything from @p s; branches on open / workout mode.
     void rebuild(const score::Snapshot& s);
@@ -81,11 +81,12 @@ private:
     lv_obj_t* mToastText = nullptr;
     lv_timer_t* mToastTimer = nullptr;
 
-    // A Paused / Ended / Idle snapshot that arrives before the first live one
-    // since onShow() may predate the intent that brought us here (sent
-    // before the service handled it): act only on the second in a row.
-    bool    mLiveSeen = false;
-    uint8_t mNotLive  = 0;
+    // Snapshots the service sent before it handled the intent that brought
+    // us here (RESUME, START_OPEN) still show the state we left: Paused,
+    // Idle or Ended. Until the first live snapshot, those are ignored.
+    bool                mLiveSeen   = false;
+    bool                mHasLeaving = false;
+    score::SessionState mLeaving    = score::SessionState::Idle;
 };
 
 #endif // ACTIVE_SCREEN_HPP

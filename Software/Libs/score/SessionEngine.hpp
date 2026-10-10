@@ -28,7 +28,8 @@ struct Snapshot {
     uint8_t  hr, flags, nextSpot, pad;
     uint16_t workoutId;
     uint8_t  pad1[2];
-    static constexpr uint8_t kFull = 1, kWorkoutDone = 2, kResumable = 4;
+    static constexpr uint8_t kFull = 1, kWorkoutDone = 2, kResumable = 4;   ///< flags
+    static constexpr uint8_t kModeOpen = 0, kModeWorkout = 1;                ///< mode
 };
 static_assert(std::is_trivially_copyable<Snapshot>::value, "Snapshot must stay POD");
 static_assert(sizeof(Snapshot) <= 48, "Snapshot must fit an IPC message");

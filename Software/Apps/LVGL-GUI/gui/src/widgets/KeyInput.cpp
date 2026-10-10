@@ -54,6 +54,12 @@ KeyInput::KeyInput(Callback cb, void* ctx)
 {
 }
 
+void KeyInput::noHold(void* ctx, Action a)
+{
+    (void)ctx;
+    (void)a;
+}
+
 KeyInput::~KeyInput()
 {
     stopTimer();
@@ -75,6 +81,10 @@ KeyInput::Action KeyInput::feed(uint8_t code)
             if (d.btn == mPressed) {
                 stopTimer();
                 mPressed = Btn::None;
+                if (mHoldFired) {
+                    mHoldFired = false;
+                    return { Kind::HoldRelease, d.btn };
+                }
             }
             return kNone;
 
@@ -94,7 +104,8 @@ KeyInput::Action KeyInput::feed(uint8_t code)
 void KeyInput::cancel()
 {
     stopTimer();
-    mPressed = Btn::None;
+    mPressed   = Btn::None;
+    mHoldFired = false;
 }
 
 void KeyInput::stopTimer()

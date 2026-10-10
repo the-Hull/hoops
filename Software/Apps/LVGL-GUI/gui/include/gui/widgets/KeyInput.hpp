@@ -15,8 +15,11 @@
  *   Click that might follow for the same button.
  * - A RELEASE stops the timer. kHoldMs equals the kernel's click limit, so
  *   every press ends as either a Click or a Hold.
+ * - The RELEASE that ends a press whose Hold fired comes back from feed() as
+ *   {HoldRelease, btn}. A screen that navigates on a hold should do so here,
+ *   not on the Hold itself: the release then cannot reach the next screen.
  *
- * feed() returns {None, None} for every code that is not a Click. Call it
+ * feed() returns {None, None} for every other code. Call it
  * from Screen::onKey(); call cancel() from onSuspend() so a hold in progress
  * does not fire while the GUI is off screen.
  ******************************************************************************
@@ -33,7 +36,7 @@ class KeyInput
 {
 public:
     enum class Btn : uint8_t { Up, Down, Select, Back, None };
-    enum class Kind : uint8_t { None, Click, Hold };
+    enum class Kind : uint8_t { None, Click, Hold, HoldRelease };
     struct Action { Kind kind; Btn btn; };
 
     /// Receives Hold actions (from the LVGL timer, on the GUI thread). A
@@ -41,12 +44,17 @@ public:
     using Callback = void (*)(void* ctx, Action a);
 
     explicit KeyInput(Callback cb = nullptr, void* ctx = nullptr);
+
+    /// Callback for screens that use no Hold: ignores it (and keeps the
+    /// "Hold dropped" warning for screens that forgot a callback).
+    static void noHold(void* ctx, Action a);
     ~KeyInput();
 
     KeyInput(const KeyInput&)            = delete;
     KeyInput& operator=(const KeyInput&) = delete;
 
-    /// Feed one SDK::GUI::Button code; returns the Click it makes, if any.
+    /// Feed one SDK::GUI::Button code; returns the Click or HoldRelease it
+    /// makes, if any.
     Action feed(uint8_t code);
 
     /// Drop a pending hold (button state unknown, e.g. on suspend).

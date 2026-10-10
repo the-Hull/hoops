@@ -7,6 +7,10 @@
 
 #include "gui/screens/SpotPickerScreen.hpp"
 
+#include <cstdio>
+
+#include "score/Stats.hpp"
+
 #include "gui/screens/ScreenManager.hpp"
 #include "gui/theme/Theme.hpp"
 
@@ -19,23 +23,17 @@ constexpr int32_t kCourtY     = 47;
 constexpr float   kCourtScale = 0.528f;
 constexpr int32_t kCourtLineW = 1;
 constexpr int32_t kCourtSpotR = 3;
+constexpr int32_t kFooterY    = 211;
 
 } // namespace
 
 SpotPickerScreen::SpotPickerScreen(Model& model)
     : Screen(model)
-    , mKeys(&SpotPickerScreen::holdCb, this)
+    , mKeys(&KeyInput::noHold, nullptr)
 {
     for (uint8_t i = 0; i < score::kSpotCount; ++i) {
         mItems[i] = { score::spotInfo(i).name, nullptr, 0 };
     }
-}
-
-void SpotPickerScreen::holdCb(void* ctx, KeyInput::Action a)
-{
-    // No hold actions here; the callback is set so none is reported lost.
-    (void)ctx;
-    (void)a;
 }
 
 void SpotPickerScreen::build()
@@ -48,6 +46,9 @@ void SpotPickerScreen::build()
     mMenu->setCircular(true);
     const uint8_t start = mModel.pickerSpot < score::kSpotCount ? mModel.pickerSpot : 0;
     mMenu->setItems(mItems, score::kSpotCount, start);
+
+    mFooter = Theme::label(mRoot, Theme::Font::Regular14, "", 40, Theme::topFor(Theme::Font::Regular14, kFooterY),
+                           160, LV_TEXT_ALIGN_CENTER, Theme::kDim);
 
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Dot, Hints::Dot, Hints::Dot, Hints::Dot);
@@ -65,6 +66,38 @@ void SpotPickerScreen::showSelection()
     mCourt->setSelected(spot);
     mShown            = spot;
     mModel.pickerSpot = spot;
+    updateFooter();
+}
+
+void SpotPickerScreen::updateFooter()
+{
+    const CustomMessage::History& h = mModel.history();
+    if (!mModel.hasHistory() || h.count == 0) {
+        Theme::setHidden(mFooter, true);
+        return;
+    }
+    const score::Category cat = score::spotInfo(static_cast<uint8_t>(mMenu->selected())).category;
+    const uint8_t c = static_cast<uint8_t>(cat);
+    const score::SessionSummary& last = h.items[0];
+    if (c >= score::kCategoryCount || last.catAtt[c] == 0) {
+        Theme::setHidden(mFooter, true);
+        return;
+    }
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Last %s \xC2\xB7 %u %%", score::categoryShort(cat),
+             static_cast<unsigned>(score::pct(last.catMakes[c], last.catAtt[c])));
+    Theme::setText(mFooter, buf);
+    Theme::setHidden(mFooter, false);
+}
+
+void SpotPickerScreen::onShow()
+{
+    mModel.requestHistory();
+}
+
+void SpotPickerScreen::onHistory()
+{
+    updateFooter();
 }
 
 void SpotPickerScreen::select()

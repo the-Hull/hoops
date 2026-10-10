@@ -33,7 +33,7 @@ const ListMenu::Item kConfirmItem = { "Discard?", "SELECT again", Theme::kBad };
 
 PauseScreen::PauseScreen(Model& model)
     : Screen(model)
-    , mKeys(&PauseScreen::holdCb, this)
+    , mKeys(&KeyInput::noHold, nullptr)
 {
     mItems[kResume]  = { "Resume", nullptr, 0 };
     mItems[kEndSave] = { "End & save", nullptr, 0 };
@@ -46,13 +46,6 @@ PauseScreen::~PauseScreen()
         lv_timer_delete(mConfirmTimer);
         mConfirmTimer = nullptr;
     }
-}
-
-void PauseScreen::holdCb(void* ctx, KeyInput::Action a)
-{
-    // No hold actions here; the callback is set so none is reported lost.
-    (void)ctx;
-    (void)a;
 }
 
 void PauseScreen::build()
@@ -89,7 +82,7 @@ void PauseScreen::show(const score::Snapshot& s)
     Theme::setText(mTime, buf);
 
     // Open: the current spot's numbers; workout: the session's so far.
-    if (s.mode == 1) {
+    if (s.mode == score::Snapshot::kModeWorkout) {
         snprintf(buf, sizeof(buf), "Step %u / %u \xC2\xB7 %u/%u \xC2\xB7 %u %%",
                  static_cast<unsigned>(s.stepIndex + 1), static_cast<unsigned>(s.stepCount),
                  static_cast<unsigned>(s.totalMakes), static_cast<unsigned>(s.totalAttempts),
@@ -196,6 +189,14 @@ void PauseScreen::onSnapshot(const score::Snapshot& s)
         if (!mSaved) {
             ScreenManager::instance().goTo(ScreenId::Home);
         }
+        return;
+    }
+    if (st == score::SessionState::Paused) {
+        mSeenPaused = true;
+    } else if (mSeenPaused && !mEnding) {
+        // Active / Rest after Paused: the session runs again. Snapshots
+        // before the first Paused one predate our PAUSE and are only shown.
+        ScreenManager::instance().goTo(ScreenId::Active);
         return;
     }
     show(s);

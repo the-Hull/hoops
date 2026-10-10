@@ -8,7 +8,8 @@
  * BACK resumes. Discard asks twice: the first SELECT turns the item into
  * "Discard? / SELECT again" for 3 s, a second SELECT within that time ends the
  * session without saving. End & save waits for the service's SAVED and then
- * opens the session's results.
+ * opens the session's results. A running snapshot after a Paused one (the
+ * session resumed elsewhere) returns to the shooting screen.
  ******************************************************************************
  */
 
@@ -44,7 +45,6 @@ protected:
 private:
     enum Item : uint8_t { kResume, kEndSave, kDiscard, kItemCount };
 
-    static void holdCb(void* ctx, KeyInput::Action a);
     static void confirmTimerCb(lv_timer_t* t);
 
     void show(const score::Snapshot& s);
@@ -65,6 +65,7 @@ private:
     bool           mConfirming   = false;
     bool           mEnding       = false;     ///< END_SESSION sent
     bool           mSaved        = false;     ///< SAVED arrived; Results requested
+    bool           mSeenPaused   = false;     ///< a Paused snapshot arrived here
 };
 
 #endif // PAUSE_SCREEN_HPP

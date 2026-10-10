@@ -44,7 +44,7 @@ constexpr Font kHeaderFonts[] = { Font::SemiBold20, Font::Medium18, Font::Regula
 
 ActiveScreen::ActiveScreen(Model& model)
     : Screen(model)
-    , mKeys(&ActiveScreen::holdCb, this)
+    , mKeys(&KeyInput::noHold, nullptr)
 {
 }
 
@@ -105,14 +105,13 @@ void ActiveScreen::build()
 
 void ActiveScreen::onShow()
 {
-    mLiveSeen = false;
-    mNotLive  = 0;
-    if (mModel.hasSnapshot()) {
-        const auto st = static_cast<score::SessionState>(mModel.snapshot().state);
-        if (st == score::SessionState::Active || st == score::SessionState::Rest
-            || st == score::SessionState::Paused) {
-            rebuild(mModel.snapshot());
-        }
+    const auto st = mModel.hasSnapshot() ? static_cast<score::SessionState>(mModel.snapshot().state)
+                                         : score::SessionState::Idle;
+    mLiveSeen   = false;
+    mHasLeaving = st != score::SessionState::Active && st != score::SessionState::Rest;
+    mLeaving    = st;
+    if (mModel.hasSnapshot() && score::isRunning(st)) {
+        rebuild(mModel.snapshot());
     }
     mModel.requestSnapshot();
 }
@@ -121,7 +120,7 @@ void ActiveScreen::onShow()
 
 void ActiveScreen::rebuild(const score::Snapshot& s)
 {
-    if (s.mode == 1) {
+    if (s.mode == score::Snapshot::kModeWorkout) {
         rebuildWorkout(s);
     } else {
         rebuildOpen(s);
@@ -286,15 +285,10 @@ void ActiveScreen::toastTimerCb(lv_timer_t* t)
 
 // --- Input -------------------------------------------------------------------
 
-void ActiveScreen::holdCb(void* ctx, KeyInput::Action a)
+void ActiveScreen::changeSpot()
 {
-    static_cast<ActiveScreen*>(ctx)->onHold(a.btn);
-}
-
-void ActiveScreen::onHold(KeyInput::Btn btn)
-{
-    // Hold DOWN: change spot, open sessions only.
-    if (btn != KeyInput::Btn::Down || !mModel.hasSnapshot() || mModel.snapshot().mode != 0) {
+    // Open sessions only.
+    if (!mModel.hasSnapshot() || mModel.snapshot().mode != score::Snapshot::kModeOpen) {
         return;
     }
     mModel.pickerMode = Model::PickerMode::ChangeSpot;
@@ -305,6 +299,10 @@ void ActiveScreen::onHold(KeyInput::Btn btn)
 void ActiveScreen::onKey(uint8_t code)
 {
     const KeyInput::Action a = mKeys.feed(code);
+    if (a.kind == KeyInput::Kind::HoldRelease && a.btn == KeyInput::Btn::Down) {
+        changeSpot();
+        return;
+    }
     if (a.kind != KeyInput::Kind::Click) {
         return;
     }
@@ -327,12 +325,11 @@ void ActiveScreen::onSnapshot(const score::Snapshot& s)
     const auto st = static_cast<score::SessionState>(s.state);
     if (st == score::SessionState::Active || st == score::SessionState::Rest) {
         mLiveSeen = true;
-        mNotLive  = 0;
         rebuild(s);
         return;
     }
-    if (!mLiveSeen && ++mNotLive < 2) {
-        return;   // possibly from before our intent; the next one decides
+    if (!mLiveSeen && mHasLeaving && st == mLeaving) {
+        return;   // sent before the service handled our intent
     }
     ScreenManager::instance().goTo(st == score::SessionState::Paused ? ScreenId::Pause : ScreenId::Home);
 }

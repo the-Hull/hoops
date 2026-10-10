@@ -21,15 +21,8 @@ constexpr int32_t kFooterY = 193;
 
 HomeScreen::HomeScreen(Model& model)
     : Screen(model)
-    , mKeys(&HomeScreen::holdCb, this)
+    , mKeys(&KeyInput::noHold, nullptr)
 {
-}
-
-void HomeScreen::holdCb(void* ctx, KeyInput::Action a)
-{
-    // No hold actions on Home; the callback is set so none is reported lost.
-    (void)ctx;
-    (void)a;
 }
 
 void HomeScreen::build()
@@ -64,9 +57,7 @@ bool HomeScreen::sessionInProgress() const
     if (!mModel.hasSnapshot()) {
         return false;
     }
-    const auto st = static_cast<score::SessionState>(mModel.snapshot().state);
-    return st == score::SessionState::Active || st == score::SessionState::Paused
-        || st == score::SessionState::Rest;
+    return score::isRunning(static_cast<score::SessionState>(mModel.snapshot().state));
 }
 
 void HomeScreen::updateItems()
