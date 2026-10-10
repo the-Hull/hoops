@@ -64,7 +64,7 @@ void WorkoutPreviewScreen::build()
 
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Off, Hints::Dot, Hints::Make, Hints::Dot);
-    show();
+    mShown = show();
 }
 
 void WorkoutPreviewScreen::onShow()
@@ -79,10 +79,13 @@ bool WorkoutPreviewScreen::show()
 {
     lv_obj_clean(mContent);
     const score::Workout* w = mModel.workoutById(mModel.selectedWorkoutId);
-    if (!w) {
+    // A user workout while the list is on its way (e.g. just saved: the
+    // one held may be stale) waits for it; onWorkouts() redraws.
+    const bool loading = !mModel.workoutsLoaded() && !score::findPreset(mModel.selectedWorkoutId);
+    if (!w || loading) {
         Theme::header(mContent, "WORKOUT", kHeaderY);
-        Theme::label(mContent, Font::Regular16, "Not found", 20, Theme::topFor(Font::Regular16, 106), 200,
-                     LV_TEXT_ALIGN_CENTER, Theme::kDim);
+        Theme::label(mContent, Font::Regular16, loading ? "Loading..." : "Not found", 20,
+                     Theme::topFor(Font::Regular16, 106), 200, LV_TEXT_ALIGN_CENTER, Theme::kDim);
         return false;
     }
 
@@ -144,7 +147,7 @@ bool WorkoutPreviewScreen::show()
 void WorkoutPreviewScreen::edit()
 {
     const score::Workout* w = mModel.workoutById(mModel.selectedWorkoutId);
-    if (!w) {
+    if (!w || !mShown) {
         return;
     }
     score::Workout& d = mModel.draft();
@@ -163,8 +166,8 @@ void WorkoutPreviewScreen::edit()
         memcpy(d.name + n, " 2", 2);
         mModel.draftIsNew = true;
     }
-    mModel.draftStep = 0;
-    // StepBuilder comes with Task 14; until then the ScreenManager shows Home.
+    mModel.draftStep  = 0;
+    mModel.draftField = 0;
     ScreenManager::instance().goTo(ScreenId::StepBuilder);
 }
 
@@ -177,7 +180,7 @@ void WorkoutPreviewScreen::onKey(uint8_t code)
     ScreenManager& sm = ScreenManager::instance();
     switch (a.btn) {
         case KeyInput::Btn::Select:
-            if (mModel.workoutById(mModel.selectedWorkoutId)) {
+            if (mShown) {
                 mModel.startWorkout(mModel.selectedWorkoutId);
                 sm.goTo(ScreenId::Active);
             }
@@ -191,7 +194,7 @@ void WorkoutPreviewScreen::onKey(uint8_t code)
 
 void WorkoutPreviewScreen::onWorkouts()
 {
-    show();
+    mShown = show();
 }
 
 void WorkoutPreviewScreen::onSuspend()

@@ -117,6 +117,7 @@ void SpotPickerScreen::select()
             if (mModel.draftStep < score::kMaxSteps) {
                 mModel.draft().steps[mModel.draftStep].spot = spot;
             }
+            mModel.draftField = 1;   // on to the goal type
             sm.goTo(ScreenId::StepBuilder);
             break;
     }

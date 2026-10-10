@@ -120,6 +120,9 @@ public:
     score::Workout& draft() { return mDraft; }
     uint8_t draftStep  = 0;
     bool    draftIsNew = true;
+    /// The step builder's field to open on (0 Spot .. 3 Rest); the
+    /// SpotPicker sets 1 (Goal type) after a pick, the builder resets it.
+    uint8_t draftField = 0;
 
     // --- Controls --------------------------------------------------------------
     /// Every button code passes here first (Screen's key callback).

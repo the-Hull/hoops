@@ -85,8 +85,8 @@ void WorkoutsScreen::newWorkout()
     d.steps[0]  = { static_cast<uint8_t>(score::Spot::Ft), 30,
                     { static_cast<uint8_t>(score::GoalType::Attempts), 0, 10 } };
     mModel.draftStep  = 0;
+    mModel.draftField = 0;
     mModel.draftIsNew = true;
-    // StepBuilder comes with Task 14; until then the ScreenManager shows Home.
     ScreenManager::instance().goTo(ScreenId::StepBuilder);
 }
 

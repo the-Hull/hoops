@@ -22,6 +22,7 @@
 #include "gui/screens/RestScreen.hpp"
 #include "gui/screens/ResultsScreen.hpp"
 #include "gui/screens/SpotPickerScreen.hpp"
+#include "gui/screens/StepBuilderScreen.hpp"
 #include "gui/screens/WorkoutPreviewScreen.hpp"
 #include "gui/screens/WorkoutsScreen.hpp"
 
@@ -126,12 +127,8 @@ Screen* ScreenManager::create(ScreenId id)
             return new WorkoutPreviewScreen(m);
         case ScreenId::Rest:
             return new RestScreen(m);
-
-        // Not built yet (Task 14): fall back to Home so the app never
-        // dead-ends.
         case ScreenId::StepBuilder:
-            LOG_WARNING("Screen %u not implemented, showing Home\n", static_cast<unsigned>(id));
-            return new HomeScreen(m);
+            return new StepBuilderScreen(m);
     }
     return nullptr;
 }

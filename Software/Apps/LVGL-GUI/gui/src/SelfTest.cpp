@@ -15,6 +15,9 @@
 
 #include "lvgl.h"
 
+#include "score/History.hpp"
+#include "score/Serializer.hpp"
+
 #include "gui/model/Model.hpp"
 #include "gui/screens/ScreenManager.hpp"
 #include "gui/theme/Theme.hpp"
@@ -289,6 +292,190 @@ bool mikanToast(const Model& m)
     return workoutStep(m, 2, 2) && onScreenLabel("Step 1 done - 6/10") && m.lastStepDone().rest_s == 0;
 }
 
+// --- Step builder ---------------------------------------------------------------
+
+/// The selected menu item: its text in the pill is black (kBg), which
+/// findLabel() cannot ask for (colour 0 = any).
+bool findBlack(lv_obj_t* o, const char* text)
+{
+    if (lv_obj_check_type(o, &lv_label_class) && strcmp(lv_label_get_text(o), text) == 0
+        && lv_color_eq(lv_obj_get_style_text_color(o, LV_PART_MAIN), lv_color_hex(Theme::kBg))) {
+        return true;
+    }
+    const uint32_t n = lv_obj_get_child_count(o);
+    for (uint32_t i = 0; i < n; ++i) {
+        if (findBlack(lv_obj_get_child(o, i), text)) {
+            return true;
+        }
+    }
+    return false;
+}
+bool menuSelected(const char* text) { return findBlack(lv_screen_active(), text); }
+
+/// The simulator's file system root is Software/Output; the binary runs
+/// from simulator/build/bin.
+long workoutsFileSize()
+{
+    FILE* f = fopen("../../../../../Output/workouts.bin", "rb");
+    if (!f) {
+        LOG_INFO("workouts.bin: missing\n");
+        return -1;
+    }
+    fseek(f, 0, SEEK_END);
+    const long n = ftell(f);
+    fclose(f);
+    LOG_INFO("workouts.bin: %ld B\n", n);
+    return n;
+}
+constexpr long kWorkoutsFile = static_cast<long>(sizeof(score::ser::Header) + sizeof(score::WorkoutStore));
+
+const score::Step& draftStep(uint8_t i) { return sModel->draft().steps[i]; }
+bool onBuilder(const char* header) { return onScreen(ScreenId::StepBuilder) && onScreenLabel(header, Theme::kAccent); }
+bool fieldActive(const char* label) { return onScreenLabel(label, Theme::kAccent); }
+constexpr uint8_t kLayupR = static_cast<uint8_t>(score::Spot::LayupR);
+constexpr uint8_t kAttempts = static_cast<uint8_t>(score::GoalType::Attempts);
+constexpr uint8_t kTime = static_cast<uint8_t>(score::GoalType::Time);
+
+// "+ New workout" on a fresh store (Software/Output/workouts.bin removed).
+bool sbNew(const Model& m)
+{
+    LOG_INFO("user workouts before: %u\n", m.userWorkoutCount());
+    const score::Workout& d = sModel->draft();
+    return onBuilder("NEW STEP 1") && m.draftIsNew && m.userWorkoutCount() == 0 && strcmp(d.name, "Custom 1") == 0
+        && d.stepCount == 1 && fieldActive("Spot") && onScreenLabel("Goal", Theme::kDim) && onScreenLabel("Free Throw")
+        && onScreenLabel("SELECT: court") && onScreenLabel("Attempts 10") && onScreenLabel("30 s", Theme::kDim);
+}
+bool sbSpot(const Model&)
+{
+    return onBuilder("NEW STEP 1") && draftStep(0).spot == kLayupR && onScreenLabel("Layup - R") && fieldActive("Spot");
+}
+bool pickerStepSpot(const Model& m)
+{
+    return onScreen(ScreenId::SpotPicker) && m.pickerMode == Model::PickerMode::StepSpot && m.pickerSpot == kLayupR;
+}
+bool sbGoalField(const Model&)
+{
+    return onBuilder("NEW STEP 1") && fieldActive("Goal") && onScreenLabel("Spot", Theme::kDim)
+        && onScreenLabel("Attempts") && onScreenLabel("goal") && draftStep(0).spot == kLayupR;
+}
+bool sbTime(const Model&)
+{
+    return fieldActive("Goal") && draftStep(0).goal.type == kTime && draftStep(0).goal.value == 30
+        && onScreenLabel("Time") && onScreenLabel("Time 30 s");
+}
+bool sbAttemptsAgain(const Model&)
+{
+    return fieldActive("Goal") && draftStep(0).goal.type == kAttempts && draftStep(0).goal.value == 10
+        && onScreenLabel("Attempts 10");
+}
+bool sbValueField(const Model&)
+{
+    return fieldActive("Goal") && onScreenLabel("10") && onScreenLabel("shots");
+}
+bool sbValue15(const Model&)
+{
+    return draftStep(0).goal.value == 15 && onScreenLabel("15") && onScreenLabel("Attempts 15");
+}
+bool sbRestField(const Model&)
+{
+    return fieldActive("Rest") && onScreenLabel("30") && onScreenLabel("s rest") && onScreenLabel("30 s", Theme::kText);
+}
+bool sbRest15(const Model&) { return draftStep(0).rest_s == 15 && onScreenLabel("15 s") && onScreenLabel("s rest"); }
+bool sbMenuNew(const Model&)
+{
+    return onBuilder("NEW STEP 1") && menuSelected("Add step") && onScreenLabel("Save workout")
+        && onScreenLabel("Delete step", Theme::kDim) && !onScreenLabel("Delete workout") && !onScreenLabel("Next step")
+        && onScreenLabel("Custom 1 - 1 step") && !onScreenLabel("s rest");
+}
+bool sbStep2(const Model& m)
+{
+    const score::Workout& d = sModel->draft();
+    return onBuilder("NEW STEP 2") && d.stepCount == 2 && m.draftStep == 1 && fieldActive("Spot")
+        && memcmp(&d.steps[0], &d.steps[1], sizeof(score::Step)) == 0 && onScreenLabel("Attempts 15")
+        && onScreenLabel("15 s", Theme::kDim);
+}
+bool sbMenuSave(const Model&)
+{
+    return onBuilder("NEW STEP 2") && menuSelected("Save workout") && onScreenLabel("Delete step", Theme::kBad)
+        && onScreenLabel("Custom 1 - 2 steps");
+}
+uint8_t sCustomId = 0;
+// 30 shots x 12 s + 2 x 15 s rest = 390 s -> 7 min.
+bool previewCustom2(const Model& m)
+{
+    const score::Workout* w = m.workoutById(m.selectedWorkoutId);
+    sCustomId = m.selectedWorkoutId;
+    LOG_INFO("saved as id %u, user workouts %u\n", m.selectedWorkoutId, m.userWorkoutCount());
+    return onScreen(ScreenId::WorkoutPreview) && m.workoutsLoaded() && w && w->stepCount == 2
+        && m.selectedWorkoutId >= score::kFirstUserWorkoutId && m.userWorkoutCount() == 1
+        && onScreenLabel("CUSTOM 1", Theme::kAccent) && onScreenLabel("x15") && onScreenLabel("Rest 15 s - about 7 min")
+        && workoutsFileSize() == kWorkoutsFile;
+}
+bool workoutsListsCustom(const Model& m)
+{
+    return onWorkouts(m) && onScreenLabel("Custom 1") && onScreenLabel("2 steps - 30 shots")
+        && m.userWorkout(0).id == sCustomId;
+}
+// The list showed it at index kPresetCount: right after the presets.
+bool previewCustomAgain(const Model& m)
+{
+    return onScreen(ScreenId::WorkoutPreview) && m.selectedWorkoutId == sCustomId
+        && m.workoutsIndex == score::kPresetCount && onScreenLabel("CUSTOM 1", Theme::kAccent);
+}
+bool sbEdit(const Model& m)
+{
+    const score::Workout& d = sModel->draft();
+    return onBuilder("EDIT STEP 1") && !m.draftIsNew && d.id == sCustomId && d.stepCount == 2 && fieldActive("Spot");
+}
+bool sbMenuEditStep1(const Model&)
+{
+    return onBuilder("EDIT STEP 1") && menuSelected("Next step") && onScreenLabel("Add step")
+        && onScreenLabel("Save workout");
+}
+bool sbEditStep2(const Model& m) { return onBuilder("EDIT STEP 2") && m.draftStep == 1 && fieldActive("Spot"); }
+bool sbBackToRest(const Model& m) { return onBuilder("EDIT STEP 1") && m.draftStep == 0 && fieldActive("Rest"); }
+// The draft lost a step; the stored workout still has both until Save.
+bool sbStepDeleted(const Model& m)
+{
+    const score::Workout* w = m.workoutById(sCustomId);
+    return onBuilder("EDIT STEP 1") && sModel->draft().stepCount == 1 && m.draftStep == 0 && fieldActive("Spot")
+        && w && w->stepCount == 2 && m.userWorkoutCount() == 1;
+}
+bool sbMenuOneStep(const Model&)
+{
+    return onBuilder("EDIT STEP 1") && menuSelected("Add step") && onScreenLabel("Delete step", Theme::kDim)
+        && !onScreenLabel("Next step") && onScreenLabel("Custom 1 - 1 step");
+}
+// 15 x 12 s + 15 s = 195 s -> 4 min.
+bool previewCustom1(const Model& m)
+{
+    const score::Workout* w = m.workoutById(m.selectedWorkoutId);
+    return onScreen(ScreenId::WorkoutPreview) && m.selectedWorkoutId == sCustomId && m.workoutsLoaded() && w
+        && w->stepCount == 1 && m.userWorkoutCount() == 1 && onScreenLabel("CUSTOM 1", Theme::kAccent)
+        && onScreenLabel("x15") && onScreenLabel("Rest 15 s - about 4 min");
+}
+bool sbDeleteWorkoutSel(const Model&) { return onBuilder("EDIT STEP 1") && menuSelected("Delete workout"); }
+bool sbConfirm(const Model& m)
+{
+    return onBuilder("EDIT STEP 1") && menuSelected("Delete?") && menuSelected("SELECT again")
+        && m.userWorkoutCount() == 1;
+}
+bool workoutsWithoutCustom(const Model& m)
+{
+    return onWorkouts(m) && m.workoutsLoaded() && m.userWorkoutCount() == 0 && !onScreenLabel("Custom 1")
+        && m.workoutById(sCustomId) == nullptr && workoutsFileSize() == kWorkoutsFile;
+}
+bool sbDuplicate(const Model& m)
+{
+    const score::Workout& d = sModel->draft();
+    return onBuilder("NEW STEP 1") && m.draftIsNew && d.id == 0 && strcmp(d.name, "Game Shots 2") == 0
+        && d.stepCount == 4 && onScreenLabel("3PT - Top");
+}
+bool workoutsAfterDiscard(const Model& m)
+{
+    return onWorkouts(m) && m.userWorkoutCount() == 0 && !onScreenLabel("Game Shots 2");
+}
+
 // Three sessions: the first is played, changes spot (hold DOWN, navigation
 // on the release), pauses, resumes and is saved (Results); the second is
 // discarded through the double SELECT; the third covers three spots and is
@@ -534,6 +721,100 @@ const Step kSteps[] = {
     {  400, nullptr, nullptr, '3', "Pause: SELECT Discard -> confirm" },
     {  400, nullptr, nullptr, '3', "Pause: SELECT -> discard, Home" },
     { 1500, onHome, "on Home after the workouts",
+                             '3', "Home: SELECT -> Workouts" },
+    // Step builder: a new two-step workout, saved, edited, deleted; a
+    // preset duplicated and dropped.
+    { 1000, nullptr, nullptr, '1', "Workouts: UP" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (wraps to + New workout)" },
+    {  400, nullptr, nullptr, '3', "Workouts: SELECT + New workout -> StepBuilder" },
+    {  800, sbNew, "StepBuilder: NEW STEP 1, Custom 1, Free Throw x10, rest 30 s",
+                             '1', "StepBuilder Spot: UP" },
+    {  300, nullptr, nullptr, '1', "StepBuilder Spot: UP (Layup - R)" },
+    {  300, sbSpot, "Spot cycled to Layup - R",
+                             '3', "StepBuilder Spot: SELECT -> SpotPicker" },
+    {  800, pickerStepSpot, "SpotPicker in StepSpot mode on Layup - R",
+                             '3', "SpotPicker: SELECT -> StepBuilder (Goal type)" },
+    {  800, sbGoalField, "back on StepBuilder, Goal field active",
+                             '2', "StepBuilder Goal: DOWN (Time)" },
+    {  300, sbTime, "Goal type Time, value snapped to 30 s",
+                             '1', "StepBuilder Goal: UP (Attempts)" },
+    {  300, sbAttemptsAgain, "Goal type Attempts, value back to 10",
+                             '3', "StepBuilder Goal: SELECT -> Value" },
+    {  300, sbValueField, "Value field: 10 shots",
+                             '1', "StepBuilder Value: UP (15)" },
+    {  300, sbValue15, "Value 15",
+                             '3', "StepBuilder Value: SELECT -> Rest" },
+    {  300, sbRestField, "Rest field: 30 s rest",
+                             '2', "StepBuilder Rest: DOWN (15)" },
+    {  300, sbRest15, "Rest 15 s",
+                             '3', "StepBuilder Rest: SELECT -> mini-menu" },
+    {  300, sbMenuNew, "mini-menu: Add step / Save workout / Delete step (dim), no Delete workout",
+                             '3', "StepBuilder menu: SELECT Add step" },
+    {  300, sbStep2, "NEW STEP 2, a copy of step 1",
+                             '3', "StepBuilder Spot: SELECT -> SpotPicker" },
+    {  800, nullptr, nullptr, '3', "SpotPicker: SELECT -> StepBuilder (Goal type)" },
+    {  800, nullptr, nullptr, '3', "StepBuilder Goal: SELECT -> Value" },
+    {  300, nullptr, nullptr, '3', "StepBuilder Value: SELECT -> Rest" },
+    {  300, nullptr, nullptr, '3', "StepBuilder Rest: SELECT -> mini-menu" },
+    {  300, nullptr, nullptr, '2', "StepBuilder menu: DOWN (Save workout)" },
+    {  300, sbMenuSave, "menu on Save workout, Custom 1 - 2 steps",
+                             '3', "StepBuilder menu: SELECT Save -> WORKOUT_SAVED -> Preview" },
+    { 1500, previewCustom2, "Preview: CUSTOM 1, 2 steps, x15, about 7 min; workouts.bin 716 B",
+                             '4', "Preview: BACK -> Workouts" },
+    {  800, workoutsListsCustom, "Workouts lists Custom 1 (2 steps - 30 shots)",
+                             '3', "Workouts: SELECT -> Preview" },
+    {  800, previewCustomAgain, "Custom 1 is the row after the presets",
+                             '2', "Preview: DOWN -> StepBuilder (edit)" },
+    {  800, sbEdit, "StepBuilder: EDIT STEP 1 of the stored workout",
+                             '3', "StepBuilder Spot: SELECT -> SpotPicker" },
+    {  800, nullptr, nullptr, '3', "SpotPicker: SELECT -> StepBuilder (Goal type)" },
+    {  800, nullptr, nullptr, '3', "StepBuilder Goal: SELECT -> Value" },
+    {  300, nullptr, nullptr, '3', "StepBuilder Value: SELECT -> Rest" },
+    {  300, nullptr, nullptr, '3', "StepBuilder Rest: SELECT -> mini-menu" },
+    {  300, sbMenuEditStep1, "menu on step 1 of 2 opens on Next step",
+                             '3', "StepBuilder menu: SELECT Next step" },
+    {  300, sbEditStep2, "EDIT STEP 2",
+                             '4', "StepBuilder Spot: BACK -> step 1, Rest" },
+    {  300, sbBackToRest, "BACK on step 2's first field: step 1's Rest field",
+                             '3', "StepBuilder Rest: SELECT -> mini-menu" },
+    {  300, nullptr, nullptr, '2', "StepBuilder menu: DOWN" },
+    {  300, nullptr, nullptr, '2', "StepBuilder menu: DOWN" },
+    {  300, nullptr, nullptr, '2', "StepBuilder menu: DOWN (Delete step)" },
+    {  300, nullptr, nullptr, '3', "StepBuilder menu: SELECT Delete step" },
+    {  300, sbStepDeleted, "draft has 1 step; the stored workout still 2",
+                             '3', "StepBuilder Spot: SELECT -> SpotPicker" },
+    {  800, nullptr, nullptr, '3', "SpotPicker: SELECT -> StepBuilder (Goal type)" },
+    {  800, nullptr, nullptr, '3', "StepBuilder Goal: SELECT -> Value" },
+    {  300, nullptr, nullptr, '3', "StepBuilder Value: SELECT -> Rest" },
+    {  300, nullptr, nullptr, '3', "StepBuilder Rest: SELECT -> mini-menu" },
+    {  300, sbMenuOneStep, "one step left: Delete step dim, no Next step",
+                             '2', "StepBuilder menu: DOWN (Save workout)" },
+    {  300, nullptr, nullptr, '3', "StepBuilder menu: SELECT Save -> Preview" },
+    { 1500, previewCustom1, "Preview: CUSTOM 1 with 1 step, about 4 min",
+                             '2', "Preview: DOWN -> StepBuilder (edit)" },
+    {  800, nullptr, nullptr, '3', "StepBuilder Spot: SELECT -> SpotPicker" },
+    {  800, nullptr, nullptr, '3', "SpotPicker: SELECT -> StepBuilder (Goal type)" },
+    {  800, nullptr, nullptr, '3', "StepBuilder Goal: SELECT -> Value" },
+    {  300, nullptr, nullptr, '3', "StepBuilder Value: SELECT -> Rest" },
+    {  300, nullptr, nullptr, '3', "StepBuilder Rest: SELECT -> mini-menu" },
+    {  300, nullptr, nullptr, '2', "StepBuilder menu: DOWN" },
+    {  300, nullptr, nullptr, '2', "StepBuilder menu: DOWN" },
+    {  300, nullptr, nullptr, '2', "StepBuilder menu: DOWN (Delete workout)" },
+    {  300, sbDeleteWorkoutSel, "menu on Delete workout",
+                             '3', "StepBuilder menu: SELECT Delete workout -> confirm" },
+    {  300, sbConfirm, "Delete? / SELECT again, nothing deleted yet",
+                             '3', "StepBuilder menu: SELECT again -> delete, Workouts" },
+    { 1500, workoutsWithoutCustom, "Workouts without Custom 1, 0 user workouts, workouts.bin still 716 B",
+                             '1', "Workouts: UP (Game Shots)" },
+    {  400, workoutsOnGameShots, "Workouts: Game Shots",
+                             '3', "Workouts: SELECT -> Preview" },
+    {  800, previewGameShots, "Preview: GAME SHOTS",
+                             '2', "Preview: DOWN -> StepBuilder (a copy)" },
+    {  800, sbDuplicate, "duplicate: NEW STEP 1, Game Shots 2, id 0, 4 steps",
+                             '4', "StepBuilder Spot: BACK -> discard, Workouts" },
+    {  800, workoutsAfterDiscard, "Workouts after the discard: nothing saved",
+                             '4', "Workouts: BACK -> Home" },
+    { 1000, onHome, "on Home after the step builder",
                              '4', "Home: BACK -> exit app" },
 };
 constexpr uint32_t kCount = sizeof(kSteps) / sizeof(kSteps[0]);

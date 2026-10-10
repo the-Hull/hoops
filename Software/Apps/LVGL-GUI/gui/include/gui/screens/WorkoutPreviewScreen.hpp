@@ -9,6 +9,8 @@
  * builder (a user workout in place; a preset as a new copy "<name> 2"),
  * BACK returns to the list. Up to four rows at the mockup's 25 px pitch,
  * five at 20 px; with more steps the fifth row reads "+ n more".
+ * A user workout whose list is still on its way (just saved in the step
+ * builder: the one held may be stale) shows "Loading..." until onWorkouts().
  ******************************************************************************
  */
 
@@ -36,13 +38,15 @@ protected:
     void build() override;
 
 private:
-    /// (Re)draw the workout into mContent; false if the id is unknown.
+    /// (Re)draw the workout into mContent; false if the id is unknown or
+    /// the list is still loading.
     bool show();
     void edit();
 
     KeyInput               mKeys;
     std::unique_ptr<Hints> mHints;
     lv_obj_t*              mContent = nullptr;
+    bool                   mShown   = false;   ///< show() drew the workout: START / edit allowed
 };
 
 #endif // WORKOUT_PREVIEW_SCREEN_HPP
