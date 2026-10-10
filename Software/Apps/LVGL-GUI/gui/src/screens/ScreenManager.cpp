@@ -15,7 +15,11 @@
 
 #include "gui/model/Model.hpp"
 #include "gui/screens/Screen.hpp"
+#include "gui/screens/ActiveScreen.hpp"
 #include "gui/screens/HomeScreen.hpp"
+#include "gui/screens/PauseScreen.hpp"
+#include "gui/screens/ResultsScreen.hpp"
+#include "gui/screens/SpotPickerScreen.hpp"
 
 ScreenManager& ScreenManager::instance()
 {
@@ -102,17 +106,21 @@ Screen* ScreenManager::create(ScreenId id)
     switch (id) {
         case ScreenId::Home:
             return new HomeScreen(m);
+        case ScreenId::SpotPicker:
+            return new SpotPickerScreen(m);
+        case ScreenId::Active:
+            return new ActiveScreen(m);
+        case ScreenId::Pause:
+            return new PauseScreen(m);
+        case ScreenId::Results:
+            return new ResultsScreen(m);
 
         // Not built yet (later tasks): fall back to Home so the app never
         // dead-ends.
-        case ScreenId::SpotPicker:
         case ScreenId::Workouts:
         case ScreenId::WorkoutPreview:
         case ScreenId::StepBuilder:
-        case ScreenId::Active:
         case ScreenId::Rest:
-        case ScreenId::Pause:
-        case ScreenId::Results:
         case ScreenId::History:
             LOG_WARNING("Screen %u not implemented, showing Home\n", static_cast<unsigned>(id));
             return new HomeScreen(m);

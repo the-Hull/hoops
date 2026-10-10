@@ -49,9 +49,12 @@ uint32_t pctColor(uint16_t makes, uint16_t attempts)
     return kBad;
 }
 
-void setText(lv_obj_t* label, const char* text)
+namespace
 {
-    char buf[64];
+
+/// Copy @p text into @p buf (64 bytes), replacing U+00B7 with '-'.
+void sanitize(char (&buf)[64], const char* text)
+{
     size_t o = 0;
     for (const char* p = text ? text : ""; *p && o + 1 < sizeof(buf); ++p) {
         // U+00B7 is 0xC2 0xB7 in UTF-8.
@@ -63,7 +66,24 @@ void setText(lv_obj_t* label, const char* text)
         }
     }
     buf[o] = '\0';
+}
+
+} // namespace
+
+void setText(lv_obj_t* label, const char* text)
+{
+    char buf[64];
+    sanitize(buf, text);
     lv_label_set_text(label, buf);
+}
+
+int32_t textWidth(Font f, const char* text, int32_t letterSpace)
+{
+    char buf[64];
+    sanitize(buf, text);
+    lv_point_t size;
+    lv_text_get_size(&size, buf, font(f), letterSpace, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    return size.x;
 }
 
 lv_obj_t* label(lv_obj_t* parent, Font f, const char* text, int32_t x, int32_t y, int32_t w,
@@ -77,6 +97,12 @@ lv_obj_t* label(lv_obj_t* parent, Font f, const char* text, int32_t x, int32_t y
 int32_t topFor(Font f, int32_t yCentre)
 {
     return yCentre - lv_font_get_line_height(font(f)) / 2;
+}
+
+int32_t topForBaseline(Font f, int32_t yBaseline)
+{
+    const lv_font_t* fn = font(f);
+    return yBaseline - (lv_font_get_line_height(fn) - fn->base_line);
 }
 
 lv_obj_t* header(lv_obj_t* parent, const char* text, int32_t yCentre, uint32_t color)

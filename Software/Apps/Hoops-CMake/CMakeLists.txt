@@ -54,6 +54,7 @@ una_app_build_service(${APP_NAME}Service.elf)
 # Build GUI (LVGL)
 set(GUI_SOURCES
     ${GUI_APP_SOURCES}
+    ${LIBS_SCORE_SOURCES}
     ${UNA_SDK_SOURCES_COMMON}
     ${UNA_SDK_SOURCES_GUI_LVGL}
 )

@@ -85,6 +85,14 @@ lv_obj_t* header(lv_obj_t* parent, const char* text, int32_t yCentre, uint32_t c
 /// Top of a label box in @p f whose text should be centred on @p yCentre.
 int32_t topFor(Font f, int32_t yCentre);
 
+/// Top of a label box in @p f whose baseline should sit at @p yBaseline, so
+/// labels in different faces can share one baseline.
+int32_t topForBaseline(Font f, int32_t yBaseline);
+
+/// Width in px of @p text in @p f on one line, measured as setText() would
+/// render it (middle dots replaced).
+int32_t textWidth(Font f, const char* text, int32_t letterSpace = 0);
+
 /// Duration: "m:ss" under an hour ("0:24", "12:41"), "h:mm:ss" from an
 /// hour up ("1:02:03").
 void fmtDuration(char* out, size_t n, uint32_t seconds);

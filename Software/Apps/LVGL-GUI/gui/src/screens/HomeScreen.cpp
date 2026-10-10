@@ -1,59 +1,57 @@
 /**
  ******************************************************************************
  * @file    HomeScreen.cpp
- * @brief   Home: "HOOPS" header and the main menu.
+ * @brief   Home: "HOOPS" header, the main menu and the last session's line.
  ******************************************************************************
  */
 
 #include "gui/screens/HomeScreen.hpp"
 
+#include <cstdio>
+
+#include "gui/screens/ScreenManager.hpp"
 #include "gui/theme/Theme.hpp"
 
 namespace
 {
 
-const ListMenu::Item kItems[] = {
-    { "Open Session", nullptr, Theme::kText },
-    { "Workouts",     nullptr, Theme::kText },
-    { "History",      nullptr, Theme::kText },
-    { "Settings",     nullptr, Theme::kDim },
-};
-constexpr uint16_t kItemCount = sizeof(kItems) / sizeof(kItems[0]);
+constexpr int32_t kFooterY = 193;
 
 } // namespace
 
 HomeScreen::HomeScreen(Model& model)
     : Screen(model)
+    , mKeys(&HomeScreen::holdCb, this)
 {
+}
+
+void HomeScreen::holdCb(void* ctx, KeyInput::Action a)
+{
+    // No hold actions on Home; the callback is set so none is reported lost.
+    (void)ctx;
+    (void)a;
 }
 
 void HomeScreen::build()
 {
-#if HOOPS_WIDGET_DEMO
-    mRing = std::make_unique<Ring>(mRoot);
-    mRing->setProgress(636, Theme::kGood);
-    mRing->setDashed(Theme::kAmber);
-    const uint8_t states[10] = { 1, 1, 2, 1, 1, 0, 0, 0, 0, 0 };
-    mRing->setSegments(10, states);
-
-    mCourt = std::make_unique<Court>(mRoot, 67, 0, 0.53f, 1, 3);
-    for (uint8_t s = 0; s < score::kSpotCount; ++s) {
-        mCourt->setSpotColor(s, s % 3 == 0 ? Theme::kGood : (s % 3 == 1 ? Theme::kAmber : Theme::kBad));
-    }
-    mCourt->setSelected(1);
-#endif
-
     Theme::header(mRoot, "HOOPS", 47);
 
     mMenu = std::make_unique<ListMenu>(mRoot, ListMenu::homeGeometry());
-    mMenu->setItems(kItems, kItemCount, mModel.homeIndex);
+
+    mFooter = Theme::label(mRoot, Theme::Font::Regular14, "", 20, Theme::topFor(Theme::Font::Regular14, kFooterY),
+                           200, LV_TEXT_ALIGN_CENTER, Theme::kDim);
 
     mHints = std::make_unique<Hints>(mRoot);
-#if HOOPS_WIDGET_DEMO
-    mHints->set(Hints::Undo, Hints::PauseIcon, Hints::Make, Hints::Miss);
-#else
     mHints->set(Hints::Off, Hints::Off, Hints::Dot, Hints::Dot);
-#endif
+
+    updateItems();
+    updateFooter();
+}
+
+void HomeScreen::onShow()
+{
+    mModel.requestSnapshot();
+    mModel.requestHistory();
 }
 
 void HomeScreen::onHide()
@@ -61,9 +59,96 @@ void HomeScreen::onHide()
     mModel.homeIndex = static_cast<uint8_t>(mMenu->selected());
 }
 
-void HomeScreen::onSuspend()
+bool HomeScreen::sessionInProgress() const
 {
-    mKeys.cancel();
+    if (!mModel.hasSnapshot()) {
+        return false;
+    }
+    const auto st = static_cast<score::SessionState>(mModel.snapshot().state);
+    return st == score::SessionState::Active || st == score::SessionState::Paused
+        || st == score::SessionState::Rest;
+}
+
+void HomeScreen::updateItems()
+{
+    const bool resume = sessionInProgress();
+    if (mCount > 0 && resume == mHasResume) {
+        return;
+    }
+
+    // Keep the selected action across the change; first build uses homeIndex.
+    uint16_t sel = mModel.homeIndex;
+    if (mCount > 0) {
+        const Action current = mActions[mMenu->selected()];
+        sel = 0;
+        for (uint8_t i = 0; i < mCount; ++i) {
+            if (mActions[i] == current) {
+                sel = i;
+            }
+        }
+        if (current != Action::Resume) {
+            sel = static_cast<uint16_t>(resume ? sel + 1 : sel - 1);
+        }
+    }
+
+    mCount     = 0;
+    mHasResume = resume;
+    auto add = [this](Action a, const char* text, uint32_t color) {
+        mItems[mCount]   = { text, nullptr, color };
+        mActions[mCount] = a;
+        ++mCount;
+    };
+    if (resume) {
+        add(Action::Resume, "Resume session", Theme::kText);
+    }
+    add(Action::Open,     "Open Session", Theme::kText);
+    add(Action::Workouts, "Workouts",     Theme::kText);
+    add(Action::History,  "History",      Theme::kText);
+    add(Action::Settings, "Settings",     Theme::kDim);
+
+    mMenu->setItems(mItems, mCount, sel);
+}
+
+void HomeScreen::updateFooter()
+{
+    if (!mModel.hasHistory() || mModel.history().count == 0) {
+        Theme::setHidden(mFooter, true);
+        return;
+    }
+    const score::SessionSummary& last = mModel.history().items[0];
+    char date[12];
+    Theme::fmtDate(date, sizeof(date), last.ymd);
+    char buf[40];
+    snprintf(buf, sizeof(buf), "Last \xC2\xB7 %s \xC2\xB7 %u %%", date, static_cast<unsigned>(last.totalPct));
+    Theme::setText(mFooter, buf);
+    Theme::setHidden(mFooter, false);
+}
+
+void HomeScreen::activate(Action a)
+{
+    ScreenManager& sm = ScreenManager::instance();
+    switch (a) {
+        case Action::Resume:
+            // Rest gets its own screen in a later task; until then Active.
+            if (static_cast<score::SessionState>(mModel.snapshot().state) == score::SessionState::Paused) {
+                sm.goTo(ScreenId::Pause);
+            } else {
+                sm.goTo(ScreenId::Active);
+            }
+            break;
+        case Action::Open:
+            mModel.pickerMode = Model::PickerMode::StartOpen;
+            sm.goTo(ScreenId::SpotPicker);
+            break;
+        case Action::Workouts:
+            sm.goTo(ScreenId::Workouts);
+            break;
+        case Action::History:
+            sm.goTo(ScreenId::History);
+            break;
+        case Action::Settings:
+            break;
+    }
 }
 
 void HomeScreen::onKey(uint8_t code)
@@ -75,8 +160,41 @@ void HomeScreen::onKey(uint8_t code)
     switch (a.btn) {
         case KeyInput::Btn::Up:     mMenu->prev(); break;
         case KeyInput::Btn::Down:   mMenu->next(); break;
-        case KeyInput::Btn::Select: break;   // menu actions arrive with their screens
-        case KeyInput::Btn::Back:   mModel.exitApp(); break;
+        case KeyInput::Btn::Select: activate(mActions[mMenu->selected()]); break;
+        case KeyInput::Btn::Back:
+            if (sessionInProgress()) {
+                // The pause menu is the way out of a session; make it true.
+                if (static_cast<score::SessionState>(mModel.snapshot().state) != score::SessionState::Paused) {
+                    mModel.pause();
+                }
+                ScreenManager::instance().goTo(ScreenId::Pause);
+            } else {
+                mModel.exitApp();
+            }
+            break;
         case KeyInput::Btn::None:   break;
     }
+}
+
+void HomeScreen::onSnapshot(const score::Snapshot& s)
+{
+    (void)s;
+    updateItems();
+}
+
+void HomeScreen::onHistory()
+{
+    updateFooter();
+}
+
+void HomeScreen::onIdleTimeout()
+{
+    if (!sessionInProgress()) {
+        mModel.exitApp();
+    }
+}
+
+void HomeScreen::onSuspend()
+{
+    mKeys.cancel();
 }
