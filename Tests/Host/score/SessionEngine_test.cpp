@@ -27,8 +27,8 @@ TEST(EngineOpen, HrAverage) { SessionEngine e; e.startOpen(Spot::Ft, 1); e.addHr
   EXPECT_EQ(e.snapshot().hr, 160); EXPECT_EQ(e.session().hrMax, 160); EXPECT_EQ(e.session().hrSum, 300u); EXPECT_EQ(e.session().hrN, 2); }
 
 static Workout two() { Workout w{}; w.id = 7; w.stepCount = 2;
-  w.steps[0] = { (uint8_t)Spot::Ft,   { (uint8_t)GoalType::Attempts, 3 }, 10 };
-  w.steps[1] = { (uint8_t)Spot::Top3, { (uint8_t)GoalType::Makes,    2 }, 0  }; return w; }
+  w.steps[0] = { (uint8_t)Spot::Ft,   10, { (uint8_t)GoalType::Attempts, 0, 3 } };
+  w.steps[1] = { (uint8_t)Spot::Top3, 0,  { (uint8_t)GoalType::Makes,    0, 2 } }; return w; }
 TEST(EngineWorkout, AttemptsGoalEntersRest) { SessionEngine e; e.startWorkout(two(), 1);
   EXPECT_EQ(e.snapshot().mode, 1); EXPECT_EQ(e.snapshot().stepCount, 2); EXPECT_EQ(e.snapshot().goalValue, 3);
   e.shot(true); e.shot(false); EXPECT_EQ(e.shot(true), SessionEngine::Event::StepDone);
@@ -47,7 +47,7 @@ TEST(EngineWorkout, MakesGoalAndWorkoutDone) { SessionEngine e; e.startWorkout(t
   EXPECT_EQ(e.shot(true), SessionEngine::Event::None); EXPECT_EQ(e.snapshot().totalAttempts, 7); } // extra shots allowed
 TEST(EngineWorkout, UndoStopsAtStepBoundary) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true); e.skipRest();
   bool m; EXPECT_FALSE(e.undo(m)); e.shot(false); EXPECT_TRUE(e.undo(m)); EXPECT_FALSE(e.undo(m)); }
-TEST(EngineWorkout, TimeGoal) { Workout w{}; w.stepCount = 1; w.steps[0] = { (uint8_t)Spot::Ft, { (uint8_t)GoalType::Time, 5 }, 0 };
+TEST(EngineWorkout, TimeGoal) { Workout w{}; w.stepCount = 1; w.steps[0] = { (uint8_t)Spot::Ft, 0, { (uint8_t)GoalType::Time, 0, 5 } };
   SessionEngine e; e.startWorkout(w, 1); for (int i = 0; i < 4; ++i) EXPECT_EQ(e.tick(), SessionEngine::Event::None);
   EXPECT_EQ(e.tick(), SessionEngine::Event::WorkoutDone); }
 TEST(EngineWorkout, ZeroRestAdvancesImmediately) { Workout w = two(); w.steps[0].rest_s = 0; SessionEngine e; e.startWorkout(w, 1);

@@ -7,12 +7,10 @@
 
 namespace score {
 
-static_assert(kCategoryCount == 4, "SessionSummary category arrays assume 4 categories");
-
 SessionSummary summarize(const Session& s, uint32_t ymd)
 {
     SessionSummary r;
-    std::memset(&r, 0, sizeof r);   // incl. implicit hole before elapsed_s: deterministic flash bytes
+    std::memset(&r, 0, sizeof r);   // pads zero
     r.id        = s.id;
     r.ymd       = ymd;
     r.workoutId = s.workoutId;
@@ -53,6 +51,8 @@ const SessionSummary* SessionIndex::newest(uint8_t back) const
 {
     return back < count ? &items[count - 1 - back] : nullptr;
 }
+
+bool SessionIndex::valid() const { return count <= kIndexCapacity; }
 
 bool SessionIndex::remove(uint32_t id)
 {
@@ -104,6 +104,17 @@ const Workout* WorkoutStore::find(uint8_t id) const
     for (uint8_t i = 0; i < count; ++i)
         if (items[i].id == id) return &items[i];
     return nullptr;
+}
+
+bool WorkoutStore::valid() const
+{
+    if (count > kMaxUserWorkouts) return false;
+    for (uint8_t i = 0; i < count; ++i) {
+        const Workout& w = items[i];
+        if (w.id < kFirstUserWorkoutId || w.id >= kFirstUserWorkoutId + kMaxUserWorkouts) return false;
+        if (w.stepCount < 1 || w.stepCount > kMaxSteps) return false;
+    }
+    return true;
 }
 
 uint8_t WorkoutStore::nextCustomNumber() const { return static_cast<uint8_t>(count + 1); }

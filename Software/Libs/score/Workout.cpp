@@ -8,7 +8,7 @@ constexpr uint32_t kSecondsPerShot = 12;
 
 constexpr Step step(Spot s, GoalType t, uint16_t v, uint8_t rest)
 {
-    return { static_cast<uint8_t>(s), { static_cast<uint8_t>(t), v }, rest };
+    return { static_cast<uint8_t>(s), rest, { static_cast<uint8_t>(t), 0, v } };
 }
 
 constexpr GoalType A = GoalType::Attempts;

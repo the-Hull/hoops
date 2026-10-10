@@ -8,20 +8,27 @@
 #include "score/Session.hpp"
 #include "score/Workout.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
 namespace score {
 
+static_assert(kCategoryCount == 4, "SessionSummary layout assumes 4 categories");
+
+// Persisted PODs: padding-free (explicit pads, zeroed).
 struct SessionSummary {
     uint32_t id, ymd;
     uint16_t workoutId;
-    uint16_t catMakes[4], catAtt[4];   ///< indexed by Category
+    uint16_t catMakes[kCategoryCount], catAtt[kCategoryCount];   ///< indexed by Category
+    uint8_t  pad0[2];
     uint32_t elapsed_s;
     uint8_t  totalPct, pad[3];
 };
 static_assert(std::is_trivially_copyable<SessionSummary>::value, "SessionSummary is memcpy'd to flash");
-static_assert(sizeof(SessionSummary) == 36, "SessionSummary flash layout changed");
+static_assert(sizeof(SessionSummary) == 36 && offsetof(SessionSummary, elapsed_s) == 28,
+              "SessionSummary flash layout changed");
+static_assert(std::has_unique_object_representations<SessionSummary>::value, "SessionSummary: no padding");
 
 SessionSummary summarize(const Session& s, uint32_t ymd);
 
@@ -36,8 +43,10 @@ struct SessionIndex {
     const SessionSummary* find(uint32_t id) const;
     const SessionSummary* newest(uint8_t back) const;  ///< back 0 = newest, nullptr past the start
     bool remove(uint32_t id);
+    bool valid() const;   ///< count in range (check after load)
 };
 static_assert(std::is_trivially_copyable<SessionIndex>::value, "SessionIndex is memcpy'd to flash");
+static_assert(std::has_unique_object_representations<SessionIndex>::value, "SessionIndex: no padding");
 
 struct WorkoutStore {
     uint8_t count;
@@ -49,7 +58,9 @@ struct WorkoutStore {
     bool remove(uint8_t id);
     const Workout* find(uint8_t id) const;
     uint8_t nextCustomNumber() const;      ///< count + 1, for "Custom N"
+    bool valid() const;   ///< count, ids and stepCounts in range (check after load)
 };
 static_assert(std::is_trivially_copyable<WorkoutStore>::value, "WorkoutStore is memcpy'd to flash");
+static_assert(std::has_unique_object_representations<WorkoutStore>::value, "WorkoutStore: no padding");
 
 } // namespace score

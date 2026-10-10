@@ -31,7 +31,7 @@ TEST(Workout, TotalsAndEstimate) {
     const Workout& g = preset(4);            // 4 × 10 attempts, rest 30
     EXPECT_EQ(g.totalShots(), 40);
     EXPECT_EQ(g.estimateSeconds(), 40u * 12u + 4u * 30u);
-    Workout t{}; t.stepCount = 1; t.steps[0] = { 0, { static_cast<uint8_t>(GoalType::Time), 60 }, 0 };
+    Workout t{}; t.stepCount = 1; t.steps[0] = { 0, 0, { static_cast<uint8_t>(GoalType::Time), 0, 60 } };
     EXPECT_EQ(t.totalShots(), 0);
     EXPECT_EQ(t.estimateSeconds(), 60u);
 }

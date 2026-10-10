@@ -44,6 +44,12 @@ TEST(History, SummarizeSplitsByCategory) {
     EXPECT_EQ(r.catMakes[idx(Category::Layup)], 1); EXPECT_EQ(r.catAtt[idx(Category::Layup)], 2);
     EXPECT_EQ(r.totalPct, 63);   // 5/8 = 62.5 → 63
     EXPECT_EQ(r.pad[0] | r.pad[1] | r.pad[2], 0);
+    EXPECT_EQ(r.pad0[0] | r.pad0[1], 0);
+    uint8_t raw[sizeof r];
+    std::memcpy(raw, &r, sizeof r);
+    EXPECT_EQ(raw[26], 0);   // pad0, before elapsed_s
+    EXPECT_EQ(raw[27], 0);
+    EXPECT_EQ(raw[28], 300 & 0xFF);   // elapsed_s (little-endian)
 }
 TEST(History, SummarizeEmptySession) {
     const Session s{};
@@ -94,6 +100,16 @@ TEST(History, FindAndRemoveCompacts) {
     EXPECT_EQ(ix.count, 4);
     EXPECT_TRUE(ix.remove(14));
     EXPECT_EQ(ix.newest(0)->id, 13u);
+}
+TEST(History, IndexValid) {
+    SessionIndex ix{};
+    EXPECT_TRUE(ix.valid());
+    ix.count = kIndexCapacity;
+    EXPECT_TRUE(ix.valid());
+    ix.count = kIndexCapacity + 1;
+    EXPECT_FALSE(ix.valid());
+    ix.count = 0xFF;
+    EXPECT_FALSE(ix.valid());
 }
 
 TEST(WorkoutStore, AddAssignsSequentialIds) {
@@ -154,4 +170,21 @@ TEST(WorkoutStore, FindAndNextCustomNumber) {
     char name[kNameLen];
     std::snprintf(name, sizeof name, "Custom %u", static_cast<unsigned>(st.nextCustomNumber()));
     EXPECT_STREQ(name, "Custom 3");
+}
+TEST(WorkoutStore, Valid) {
+    WorkoutStore st{};
+    EXPECT_TRUE(st.valid());
+    uint8_t id = 0;
+    st.add(named("A"), id); st.add(named("B"), id);
+    EXPECT_TRUE(st.valid());
+    st.items[1].stepCount = kMaxSteps;
+    EXPECT_TRUE(st.valid());
+    st.items[1].stepCount = 0;          EXPECT_FALSE(st.valid());
+    st.items[1].stepCount = kMaxSteps + 1; EXPECT_FALSE(st.valid());
+    st.items[1].stepCount = 1;
+    st.items[1].id = kFirstUserWorkoutId - 1;                    EXPECT_FALSE(st.valid());
+    st.items[1].id = kFirstUserWorkoutId + kMaxUserWorkouts;     EXPECT_FALSE(st.valid());
+    st.items[1].id = kFirstUserWorkoutId + kMaxUserWorkouts - 1; EXPECT_TRUE(st.valid());
+    st.count = kMaxUserWorkouts + 1;
+    EXPECT_FALSE(st.valid());
 }

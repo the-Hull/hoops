@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 namespace score {
 
@@ -17,6 +18,7 @@ struct Shot {
     uint16_t t_s;    ///< seconds since session start
 };
 static_assert(sizeof(Shot) == 4, "Shot must stay 4 bytes");
+static_assert(std::has_unique_object_representations<Shot>::value, "Shot: no padding");
 
 enum class SessionState : uint8_t { Idle, Active, Paused, Rest, Ended };
 
@@ -36,7 +38,10 @@ struct Session {
     uint16_t stepStartCount;   ///< count at current step start
     uint16_t stepElapsed_s;
     uint16_t restRemaining_s;
+    uint8_t  pad0[2];          ///< zero; fills tail padding (shots → offset 32)
     Shot     shots[kMaxShots];
 };
+static_assert(sizeof(Session) == 32 + 4 * kMaxShots, "Session flash layout changed");
+static_assert(std::has_unique_object_representations<Session>::value, "Session: no padding");
 
 } // namespace score
