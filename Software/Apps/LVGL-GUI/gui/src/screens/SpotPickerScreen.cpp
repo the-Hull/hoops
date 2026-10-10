@@ -24,6 +24,9 @@ constexpr float   kCourtScale = 0.528f;
 constexpr int32_t kCourtLineW = 1;
 constexpr int32_t kCourtSpotR = 3;
 constexpr int32_t kFooterY    = 211;
+// The round screen is about 144 px wide at the footer's glyph bottoms: a
+// wider text ("Last 100 % · best 100 %" is 165 px) is drawn 1 px tighter.
+constexpr int32_t kFooterFitW = 144;
 
 } // namespace
 
@@ -47,8 +50,8 @@ void SpotPickerScreen::build()
     const uint8_t start = mModel.pickerSpot < score::kSpotCount ? mModel.pickerSpot : 0;
     mMenu->setItems(mItems, score::kSpotCount, start);
 
-    mFooter = Theme::label(mRoot, Theme::Font::Regular14, "", 40, Theme::topFor(Theme::Font::Regular14, kFooterY),
-                           160, LV_TEXT_ALIGN_CENTER, Theme::kDim);
+    mFooter = Theme::label(mRoot, Theme::Font::Regular14, "", 20, Theme::topFor(Theme::Font::Regular14, kFooterY),
+                           200, LV_TEXT_ALIGN_CENTER, Theme::kDim);
 
     mHints = std::make_unique<Hints>(mRoot);
     mHints->set(Hints::Dot, Hints::Dot, Hints::Dot, Hints::Dot);
@@ -72,33 +75,44 @@ void SpotPickerScreen::showSelection()
 
 void SpotPickerScreen::updateFooter()
 {
-    const CustomMessage::History& h = mModel.history();
-    if (!mModel.hasHistory() || h.count == 0) {
-        Theme::setHidden(mFooter, true);
+    const uint8_t          spot = static_cast<uint8_t>(mMenu->selected());
+    const score::SpotStat& last = mModel.spotLast(spot);
+    if (!mModel.hasSpotStats() || last.attempts == 0) {
+        Theme::setHidden(mFooter, true);   // never shot here
         return;
     }
-    const score::Category cat = score::spotInfo(static_cast<uint8_t>(mMenu->selected())).category;
-    const uint8_t c = static_cast<uint8_t>(cat);
-    const score::SessionSummary& last = h.items[0];
-    if (c >= score::kCategoryCount || last.catAtt[c] == 0) {
-        Theme::setHidden(mFooter, true);
-        return;
-    }
+    const score::SpotStat& best = mModel.spotBest(spot);
+    const unsigned lastPct = score::pct(last.makes, last.attempts);
     char buf[32];
-    snprintf(buf, sizeof(buf), "Last %s \xC2\xB7 %u %%", score::categoryShort(cat),
-             static_cast<unsigned>(score::pct(last.catMakes[c], last.catAtt[c])));
+    if (best.attempts > 0) {
+        snprintf(buf, sizeof(buf), "Last %u %% \xC2\xB7 best %u %%", lastPct,
+                 static_cast<unsigned>(score::pct(best.makes, best.attempts)));
+    } else {
+        snprintf(buf, sizeof(buf), "Last %u %%", lastPct);
+    }
+    const bool tight = Theme::textWidth(Theme::Font::Regular14, buf, 0) > kFooterFitW;
+    lv_obj_set_style_text_letter_space(mFooter, tight ? -1 : 0, LV_PART_MAIN);
     Theme::setText(mFooter, buf);
     Theme::setHidden(mFooter, false);
 }
 
 void SpotPickerScreen::onShow()
 {
-    mModel.requestHistory();
+    mModel.requestSpotStats();
 }
 
-void SpotPickerScreen::onHistory()
+void SpotPickerScreen::onSpotStats()
 {
     updateFooter();
+}
+
+void SpotPickerScreen::onIdleTimeout()
+{
+    // Exiting would drop the unsaved workout draft behind a step's spot.
+    if (mModel.pickerMode == Model::PickerMode::StepSpot) {
+        return;
+    }
+    Screen::onIdleTimeout();
 }
 
 void SpotPickerScreen::select()

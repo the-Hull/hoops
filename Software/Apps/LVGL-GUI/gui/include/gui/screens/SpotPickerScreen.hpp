@@ -7,11 +7,14 @@
  * teal, and the spot wheel below it. UP / DOWN move (circular). What SELECT
  * and BACK do depends on Model::pickerMode: start an open session, change
  * the spot of the running one, or set a workout step's spot. The selection
- * is kept in Model::pickerSpot. The footer shows the selected spot's
- * category in the newest saved session ("Last 3PT · 40 %"), when it has
- * attempts there; per-spot history is not kept. Starting an open session
+ * is kept in Model::pickerSpot. The footer shows the selected spot's records
+ * from the service (SPOT_STATS, requested on show): "Last 40 % · best 60 %"
+ * (the newest session with attempts there; the best session with at least
+ * kMinAttemptsForRank), "Last 40 %" without a best, nothing when the spot was
+ * never shot. Starting an open session
  * while one is in progress (e.g. restored after a crash) is refused with a
- * "Session in progress" toast.
+ * "Session in progress" toast. The idle timeout does not exit the app while
+ * a workout step's spot is picked (an unsaved draft is behind it).
  ******************************************************************************
  */
 
@@ -37,8 +40,9 @@ public:
     void onShow() override;
     void onKey(uint8_t code) override;
     void onAction(KeyInput::Action a) override;
-    void onHistory() override;
+    void onSpotStats() override;
     void onSuspend() override;
+    void onIdleTimeout() override;
 
 protected:
     void build() override;

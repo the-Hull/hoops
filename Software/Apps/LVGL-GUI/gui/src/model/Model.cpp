@@ -87,8 +87,15 @@ void Model::requestResults(uint32_t sessionId)
 
 void Model::requestHistory()
 {
-    mHasHistory = false;
+    mHasHistory    = false;
+    mHistoryTotal  = 0;
+    mHistoryLoaded = 0;
     SDK::send_msg<CustomMessage::GetHistory>(mKernel);
+}
+
+void Model::requestSpotStats()
+{
+    SDK::send_msg<CustomMessage::GetSpotStats>(mKernel);
 }
 
 void Model::exitApp()
@@ -139,6 +146,27 @@ const score::Workout* Model::workoutById(uint8_t id) const
         }
     }
     return nullptr;
+}
+
+const score::SessionSummary& Model::historyItem(uint8_t i) const
+{
+    static const score::SessionSummary kNone {};
+    if (mHistoryLoaded == 0) {
+        return kNone;
+    }
+    return mHistory[i < mHistoryLoaded ? i : mHistoryLoaded - 1];
+}
+
+const score::SpotStat& Model::spotLast(uint8_t spot) const
+{
+    static const score::SpotStat kNone {};
+    return spot < score::kSpotCount ? mSpotLast[spot] : kNone;
+}
+
+const score::SpotStat& Model::spotBest(uint8_t spot) const
+{
+    static const score::SpotStat kNone {};
+    return spot < score::kSpotCount ? mSpotBest[spot] : kNone;
 }
 
 uint32_t Model::todayYmd() const
@@ -274,12 +302,32 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
         } break;
 
         case CustomMessage::HISTORY: {
-            auto* msg      = static_cast<CustomMessage::History*>(message);
-            if (msg->offset != 0) break;   // interim until paged history (Task 8): newest page only
-            mHistory.count = msg->count;
-            memcpy(mHistory.items, msg->items, sizeof(mHistory.items));
-            mHasHistory = true;
+            // Pages arrive newest first; offset 0 starts a fresh stream. A
+            // page that does not continue the rows held (lost or stale) is
+            // ignored, so the rows stay contiguous from the newest.
+            auto* msg = static_cast<CustomMessage::History*>(message);
+            if (msg->offset == 0) {
+                mHistoryTotal  = msg->total < score::kIndexCapacity ? msg->total : score::kIndexCapacity;
+                mHistoryLoaded = 0;
+            } else if (!mHasHistory || msg->offset != mHistoryLoaded) {
+                break;
+            }
+            uint8_t count = msg->count < score::kTrendCount ? msg->count : score::kTrendCount;
+            if (count > mHistoryTotal - mHistoryLoaded) {
+                count = static_cast<uint8_t>(mHistoryTotal - mHistoryLoaded);
+            }
+            memcpy(&mHistory[mHistoryLoaded], msg->items, sizeof(score::SessionSummary) * count);
+            mHistoryLoaded = static_cast<uint8_t>(mHistoryLoaded + count);
+            mHasHistory    = true;
             l->onHistory();
+        } break;
+
+        case CustomMessage::SPOT_STATS: {
+            auto* msg = static_cast<CustomMessage::SpotStats*>(message);
+            memcpy(mSpotLast, msg->last, sizeof(mSpotLast));
+            memcpy(mSpotBest, msg->best, sizeof(mSpotBest));
+            mHasSpotStats = true;
+            l->onSpotStats();
         } break;
 
         case CustomMessage::LOCAL_TIME: {

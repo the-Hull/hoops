@@ -10,7 +10,7 @@
  * ended (resultsFrom == Session) or Model::resultsSessionId (History), and
  * shows "Loading…" until the reply; a reply naming no session shows
  * "No data". The trend (page 4) sets the session against the older ones in
- * Model::history(), which is requested on show too.
+ * the Model's history (historyItem()), which is requested on show too.
  *
  * Keys: SELECT next page (4 wraps to 1), BACK to History or Home (where the
  * results were opened from), UP / DOWN per page: page 1 previous / next

@@ -63,7 +63,11 @@ public:
     void requestResults(uint32_t sessionId);   ///< 0 = the session just ended
     /// Forget the results held, so the Results screen requests fresh ones.
     void clearResults() { mHasResults = false; }
+    /// Ask for the whole index; the service streams it in pages of
+    /// kTrendCount rows, newest first (onHistory() fires per page).
     void requestHistory();
+    /// Ask for the per-spot last / best records (onSpotStats()).
+    void requestSpotStats();
     void exitApp();
     /// Store @p s, apply its scheme here at once (applyScheme()) and send it
     /// to the service, which answers with SETTINGS.
@@ -96,9 +100,25 @@ public:
     const CustomMessage::Results& results() const { return mResults; }
     bool hasResults() const { return mHasResults; }
 
-    /// The last HISTORY reply (count may be 0); hasHistory() once it arrived.
-    const CustomMessage::History& history() const { return mHistory; }
-    bool hasHistory() const { return mHasHistory; }
+    /// The history index, newest first, as far as its pages have arrived.
+    /// hasHistory(): the first page of the latest requestHistory() is in;
+    /// historyCount(): rows received (contiguous from the newest);
+    /// historyTotal(): rows in the index; historyComplete(): all of them in.
+    bool    hasHistory() const { return mHasHistory; }
+    bool    historyComplete() const { return mHasHistory && mHistoryLoaded == mHistoryTotal; }
+    uint8_t historyCount() const { return mHistoryLoaded; }
+    uint8_t historyTotal() const { return mHistoryTotal; }
+    /// Row @p i (0 = newest), clamped to the last row received; a zero
+    /// summary while none is.
+    const score::SessionSummary& historyItem(uint8_t i) const;
+
+    /// The index's per-spot records (SPOT_STATS), indexed by score::Spot:
+    /// spotLast() = the newest session's makes/attempts there (attempts 0 =
+    /// never shot), spotBest() = the best session with at least
+    /// kMinAttemptsForRank attempts (attempts 0 = none). Zero for a bad spot.
+    bool hasSpotStats() const { return mHasSpotStats; }
+    const score::SpotStat& spotLast(uint8_t spot) const;
+    const score::SpotStat& spotBest(uint8_t spot) const;
 
     /// Local time from the service's LOCAL_TIME (tm_year since 1900, tm_mon 0-11).
     const std::tm& time() const { return mTime; }
@@ -175,8 +195,14 @@ private:
 
     CustomMessage::Results mResults;
     bool                   mHasResults = false;
-    CustomMessage::History mHistory;
-    bool                   mHasHistory = false;
+    score::SessionSummary mHistory[score::kIndexCapacity] {};   ///< newest first
+    uint8_t               mHistoryTotal  = 0;
+    uint8_t               mHistoryLoaded = 0;
+    bool                  mHasHistory    = false;
+
+    score::SpotStat mSpotLast[score::kSpotCount] {};
+    score::SpotStat mSpotBest[score::kSpotCount] {};
+    bool            mHasSpotStats = false;
 
     CustomMessage::StepDone mStepDone;
     bool                    mHasStepDone = false;

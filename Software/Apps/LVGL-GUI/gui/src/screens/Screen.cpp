@@ -24,8 +24,11 @@ void Screen::create()
         return;
     }
     mRoot = lv_obj_create(nullptr);
-    Theme::applyScreen(mRoot);   // paints black
+    // The SDK style is a black background with white text: repaint both in
+    // the active palette.
+    Theme::applyScreen(mRoot);
     lv_obj_set_style_bg_color(mRoot, Theme::rgb(Theme::kBg), LV_PART_MAIN);
+    lv_obj_set_style_text_color(mRoot, Theme::rgb(Theme::kText), LV_PART_MAIN);
     lv_obj_add_event_cb(mRoot, &Screen::keyEventCb, LV_EVENT_KEY, this);
     build();
 }

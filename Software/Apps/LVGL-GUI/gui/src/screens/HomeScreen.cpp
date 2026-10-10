@@ -121,11 +121,11 @@ void HomeScreen::updateItems()
 
 void HomeScreen::updateFooter()
 {
-    if (!mModel.hasHistory() || mModel.history().count == 0) {
+    if (!mModel.hasHistory() || mModel.historyCount() == 0) {
         Theme::setHidden(mFooter, true);
         return;
     }
-    const score::SessionSummary& last = mModel.history().items[0];
+    const score::SessionSummary& last = mModel.historyItem(0);
     char date[12];
     Theme::fmtDate(date, sizeof(date), last.ymd);
     char buf[40];

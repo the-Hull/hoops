@@ -114,6 +114,39 @@ bool noLateMiss(const Model& m)
         && m.snapshot().totalMakes == 8 && m.snapshot().totalAttempts == 8;
 }
 
+/// Logs the visible "Last …" label (the spot picker's footer), for the eye:
+/// after session 1, 3PT L-Wing (7/7 there) reads "Last 100 % - best 100 %".
+lv_obj_t* findFooter(lv_obj_t* o)
+{
+    if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) {
+        return nullptr;
+    }
+    if (lv_obj_check_type(o, &lv_label_class) && strncmp(lv_label_get_text(o), "Last ", 5) == 0) {
+        return o;
+    }
+    const uint32_t n = lv_obj_get_child_count(o);
+    for (uint32_t i = 0; i < n; ++i) {
+        if (lv_obj_t* f = findFooter(lv_obj_get_child(o, i))) {
+            return f;
+        }
+    }
+    return nullptr;
+}
+void logPickerFooter()
+{
+    lv_obj_t* f = findFooter(lv_screen_active());
+    if (!f) {
+        LOG_INFO("picker footer, spot %u: (hidden)\n", static_cast<unsigned>(sModel->pickerSpot));
+        return;
+    }
+    // The drawn text's width (with its letter spacing) against the label's.
+    lv_point_t size;
+    lv_text_get_size(&size, lv_label_get_text(f), lv_obj_get_style_text_font(f, LV_PART_MAIN),
+                     lv_obj_get_style_text_letter_space(f, LV_PART_MAIN), 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    LOG_INFO("picker footer, spot %u: %s (%d of %d px)\n", static_cast<unsigned>(sModel->pickerSpot),
+             lv_label_get_text(f), static_cast<int>(size.x), static_cast<int>(lv_obj_get_width(f)));
+}
+
 // End & save on a session without shots: dropped (SAVED 0), Home says so.
 bool emptyNotSaved(const Model& m)
 {
@@ -175,16 +208,19 @@ bool resultsPage4(const Model& m)
     return onScreen(ScreenId::Results) && m.resultsPage == 3 && onScreenLabel("TREND - 4 / 4")
         && onScreenLabel("3PT", Theme::kAccent) && onScreenLabel("60 %") && onScreenLabel("-40 vs last", Theme::kBad);
 }
-// The newest row is session 3, selected: "d.m. · Open" / "5/9 · 56 %".
+// The newest row is session 3, selected: "d.m. · Open" / "5/9 · 56 %"; the
+// whole index has arrived, at least sessions 1 and 3 of this walk.
 bool historyLists(const Model& m)
 {
-    return onScreen(ScreenId::History) && m.hasHistory() && m.history().count > 0
+    LOG_INFO("history: %u of %u rows\n", static_cast<unsigned>(m.historyCount()),
+             static_cast<unsigned>(m.historyTotal()));
+    return onScreen(ScreenId::History) && m.historyComplete() && m.historyCount() > 1
         && onScreenLabel(" - Open", 0, true) && onScreenLabel("5/9 - 56 %");
 }
 bool resultsFromHistory(const Model& m)
 {
     return resultsPage1(m) && m.resultsFrom == Model::ResultsFrom::History && m.hasResults()
-        && m.results().sessionId == m.resultsSessionId && m.history().items[0].id == m.resultsSessionId;
+        && m.results().sessionId == m.resultsSessionId && m.historyItem(0).id == m.resultsSessionId;
 }
 bool onHistory(const Model&) { return onScreen(ScreenId::History); }
 
@@ -619,7 +655,9 @@ const Step kSteps[] = {
     { 1000, emptyNotSaved, "empty session not saved: Home, toast Nothing to save",
                              '3', "Home: SELECT Open Session -> SpotPicker" },
     // Session 3: three spots in three categories, a 3-make streak, End & save.
-    {  500, nullptr, nullptr, '3', "SpotPicker: SELECT (3PT Top) -> Active" },
+    {  500, nullptr, nullptr, '1', "SpotPicker: UP (3PT L-Wing, footer logged)", &logPickerFooter },
+    {  400, nullptr, nullptr, '2', "SpotPicker: DOWN (3PT Top, footer logged)", &logPickerFooter },
+    {  400, nullptr, nullptr, '3', "SpotPicker: SELECT (3PT Top) -> Active" },
     { 1200, nullptr, nullptr, '3', "Active: make" },
     {  400, nullptr, nullptr, '3', "Active: make" },
     {  400, nullptr, nullptr, '3', "Active: make" },

@@ -456,24 +456,30 @@ void ResultsScreen::buildTrend()
                  LV_TEXT_ALIGN_CENTER, Theme::kAccent);
 
     // The newest bar is the session viewed; then the older history rows
-    // (after it in the newest-first list, or all of them when it is not
-    // listed) that have attempts in the category.
+    // (the kBars - 1 after it in the newest-first list, or the newest kBars
+    // when it is not listed) that have attempts in the category.
     const score::SpotStat& cs = mTrendCat < kTrendTotal ? r.stats.cat[mTrendCat] : r.stats.total;
     const TrendPoint current = { score::pct(cs.makes, cs.attempts), cs.attempts > 0, r.ymd };
     TrendPoint older[kBars - 1] = {};
     uint8_t    nOlder = 0;
     if (mModel.hasHistory()) {
-        const CustomMessage::History& h = mModel.history();
-        const uint8_t count = h.count < kBars ? h.count : kBars;
+        const uint8_t count = mModel.historyCount();
         uint8_t first = 0;
+        uint8_t end   = kBars;
         for (uint8_t i = 0; i < count; ++i) {
-            if (h.items[i].id == r.sessionId) {
+            if (mModel.historyItem(i).id == r.sessionId) {
                 first = static_cast<uint8_t>(i + 1);
+                end   = static_cast<uint8_t>(first + kBars - 1);
+                break;
             }
         }
-        for (uint8_t i = first; i < count && nOlder < kBars - 1; ++i) {
-            const TrendPoint p = trendPoint(h.items[i], mTrendCat);
-            if (p.has && h.items[i].id != r.sessionId) {
+        if (end > count) {
+            end = count;
+        }
+        for (uint8_t i = first; i < end && nOlder < kBars - 1; ++i) {
+            const score::SessionSummary& it = mModel.historyItem(i);
+            const TrendPoint p = trendPoint(it, mTrendCat);
+            if (p.has && it.id != r.sessionId) {
                 older[nOlder++] = p;
             }
         }
@@ -632,7 +638,10 @@ void ResultsScreen::onResults()
 
 void ResultsScreen::onHistory()
 {
-    if (mPage == kTrend && mModel.hasResults()) {
+    // Pages stream in a burst: redraw on the first (the newest rows) and on
+    // the last (an older session's neighbours), not on every one.
+    if (mPage == kTrend && mModel.hasResults()
+        && (mModel.historyCount() <= score::kTrendCount || mModel.historyComplete())) {
         rebuild();
     }
 }
