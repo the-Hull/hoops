@@ -1,6 +1,6 @@
 # Hoops (ScoreTrack) — UNA Watch app
 
-Basketball shooting tracker for the UNA Watch, built on the UNA SDK v1.5.0 with the
+Basketball shooting tracker for the UNA Watch, built on the UNA SDK v1.6.0-rc1 (checkout at ~/una-sdk) with the
 **LVGL** GUI (no TouchGFX — the developer is on Ubuntu, where TouchGFX Designer
 doesn't exist). Scaffolded from the SDK tutorial `Docs/Tutorials/Buttons` (LVGL variant) with fonts from
 `Examples/Apps/RunLVGL`; RunLVGL remains the reference for the Model + ScreenManager + Theme pattern.
@@ -39,7 +39,11 @@ Two processes, as every UNA app:
   FNV-1a checksum} + the raw POD:
   - `workouts.bin` ('HWK1', `WorkoutStore`) and `sessions/index.bin` ('HIX1', `SessionIndex`): written as
     `<path>.tmp` then renamed over the target; a lone `.tmp` is recovered on load.
-  - `current.bin` ('HSS1', `Session`): the running session, for crash resume (restored → Paused, `kResumable`).
+  - `current.bin` ('HSS1', `Session`): the running session, for crash resume (restored → Paused, `kResumable`);
+    written atomically like the others. End & save: session file → index row → evicted file → index →
+    remove current.bin, so a crash at any point loses nothing (a current.bin whose id is already indexed is
+    dropped on start). A restored workout session whose step no longer fits the (edited) workout continues
+    as an open session.
   - `sessions/<id>.bin` ('HSS1'): one per saved session; evicted with its index row (oldest beyond 50).
 - **Screens** (`ScreenId` order): Home, SpotPicker, Workouts, WorkoutPreview, StepBuilder, Active (open and
   workout mode, undo toast), Rest (also the workout-done summary), Pause, Results (4 pages: court, categories,
@@ -63,7 +67,7 @@ All paths from the repo root.
 ```bash
 # Host unit tests (engine only; fetches googletest on first configure)
 cmake -S Tests/Host -B build-host -DCMAKE_BUILD_TYPE=Debug
-cmake --build build-host && ctest --test-dir build-host --output-on-failure      # 62 tests
+cmake --build build-host && ctest --test-dir build-host --output-on-failure      # 66 tests
 
 # Simulator (needs libsdl2-dev; run from build/bin — the mock file system is ../../../../../Output = Software/Output)
 cd Software/Apps/LVGL-GUI/simulator
@@ -86,9 +90,10 @@ cd Software/Apps/LVGL-GUI/simulator
 cmake -S . -B build-selftest -G Ninja -DCMAKE_CXX_FLAGS=-DHOOPS_SELFTEST=1 && cmake --build build-selftest
 rm -f ../../../Output/workouts.bin ../../../Output/current.bin    # fresh store, no session in progress
 (cd build/bin && SDL_VIDEODRIVER=dummy timeout 400 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
-#   full walk: "done: 84 checks passed, 0 failed"
+#   full walk: "done: 86 checks passed, 0 failed"
 # Crash resume: phase 1 starts an open session, 5 shots (3 makes), then exits without ending it
-# (kill -9 it after "phase 1 ready" for a real crash); phase 2 restarts and checks Resume -> Pause 3/5.
+# (kill -9 it after "phase 1 ready" for a real crash); phase 2 restarts, checks that neither an open
+# session nor a workout can start while it is in progress (toasts), then Resume -> Pause 3/5 (9 checks).
 (cd build/bin && HOOPS_SELFTEST_PHASE=1 SDL_VIDEODRIVER=dummy timeout 60 ./HoopsSimulator >/dev/null;
                  HOOPS_SELFTEST_PHASE=2 SDL_VIDEODRIVER=dummy timeout 60 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
 rm -rf build-selftest build/bin/HoopsSimulator && cmake --build build     # back to the normal binary
@@ -108,12 +113,14 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
 → rebuild → `app-manifest.json` + `python3 $UNA_SDK/Utilities/Scripts/app_packer/min_kernel_version.py --stamp app-manifest.json`
 → zip `.uapp` + `icon.png` + manifest → Version → Upload New → Release.
 
-## Hardware & SDK facts (v1.5.0 docs)
+## Hardware & SDK facts (SDK v1.6.0-rc1 (checkout at ~/una-sdk); online docs are v1.5.0)
 
 - Display: 1.2" round MIP LCD, 240×240, 64 colours (ABGR2222), LED backlight, no touch.
 - Buttons: L1 top-left (UP), L2 bottom-left (DOWN), R1 top-right (SELECT/START/STOP), R2 bottom-right (BACK).
-  LVGL: key events via `LV_EVENT_KEY` → `Screen::onKey(code)`. The kernel sends PRESS, RELEASE and CLICK (CLICK
-  only for holds < 500 ms); `KeyInput` turns these into Click / Hold (500 ms timer) / HoldRelease. Screens that
+  LVGL: key events via `LV_EVENT_KEY` → `Screen::onKey(code)`. The kernel sends PRESS, CLICK (only for holds
+  < 500 ms), RELEASE, in that order; `KeyInput` turns these into Click / Hold (500 ms timer) / HoldRelease, and
+  every press ends as exactly one Click or HoldRelease (HoldRelease = the release of a press with no Click, held
+  or not). Screens act on `KeyInput::isActivate()` (either one), so a slow press is never lost; screens that
   navigate on a hold do it on HoldRelease, so the release can't reach the next screen.
 - Sensors (`SDK::Sensor::Type`): ACCELEROMETER, GYROSCOPE, FUSION, HEART_RATE, WRIST_MOTION, MOTION_DETECT,
   ACTIVITY_RECOGNITION, GESTURE_RECOGNITION (undocumented), TOUCH_DETECT. `SDK::Sensor::Connection(type, period,
@@ -134,6 +141,12 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
   BACK = resume). BACK on Home during a session goes to Pause.
 - Crash resume: a restored session is Paused; Home shows "Resume session" first (selected) and an amber
   "Session in progress" line under the header; Resume opens Pause.
+- One session at a time: Open Session / Workouts still open while one is in progress, but the picker's SELECT
+  and the preview's START show a 2 s "Session in progress" toast instead of starting. Active falls back to
+  Pause / Home if no live snapshot arrives within 1.5 s of entry.
+- End & save of a session with no shots = discard (service sends SAVED{0}; Home toast "Nothing to save").
+  SAVED{0} otherwise = save failed (Home toast "Save failed"; current.bin is kept). No SAVED within 3 s:
+  Pause/Rest give the keys back with a "No reply" toast.
 - Workout step done → long buzz → Rest (countdown ring, UP +15 s, SELECT skip); zero-rest steps show a 1.5 s
   toast instead. After the last step Rest shows the workout-done summary (UP keep shooting = extra shots).
 - Step builder: fields Spot / Goal type / Value / Rest; SELECT on Spot opens the full spot picker; after Rest a
@@ -141,7 +154,8 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
   after 3 s with "No reply".
 - Results via SELECT: 1 court map (UP/DOWN move between spots; caption "3PT · Top 5/10 · 50 %") → 2 categories
   → 3 highlights (STREAK names the spot) → 4 trend. BACK = done (already saved).
-- Heart rate is counted in Active and Rest, not while paused.
+- Heart rate is counted in Active and Rest, not while paused: the HR sensor is disconnected on PAUSE (and for a
+  restored session until it is resumed) and reconnected on RESUME.
 - Colours: green ≥ 50 %, amber 35–49 %, red < 35 %, teal accent `#00AAAA`, black background; 64-colour palette.
 - Spots (13): 3PT L-Corner, L-Wing, Top, R-Wing, R-Corner · Mid L-Baseline, L-Elbow, Top-Key, R-Elbow,
   R-Baseline · FT · Layup L, R.
@@ -161,7 +175,19 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
 
 MVP complete (2026-10-10): engine + host tests, service (IPC, haptics, storage, crash resume, HR, wrist-raise
 backlight), all 10 screens with presets, custom workouts, results, history and trend; self-test 84/84 and
-crash-resume 5/5 headless; `Hoops_0.0.0-dev.uapp` builds.
+crash-resume 5/5 headless; `Hoops_0.0.0-dev.uapp` builds. Final review fixes (2026-10-10): self-test 86/86,
+crash-resume 9/9, 66 host tests.
+
+Known limitations / next:
+- HISTORY carries 5 rows (`kTrendCount`); the index keeps 50 — the History screen shows only the newest 5.
+- Idle timeout (60 s, exits the app) only on Home and only without a session in progress.
+- The date (LOCAL_TIME) is sent once at GUI start; a GUI left open past midnight shows yesterday's "today".
+- Hold = 500 ms (`KeyInput::kHoldMs`) with HoldRelease semantics (see Hardware facts); the kernel's
+  PRESS → CLICK → RELEASE order is taken from the SDK simulator — confirm on the watch.
+- Workout ids are reused after a delete (lowest free id ≥ 100), and History rows store only the id, so an
+  old row shows the name of whatever workout now has that id.
+- SAVE_WORKOUT is validated in the service (steps in range, NUL-terminated name); WORKOUT_SAVED{0} → builder
+  toast "Not saved". "Delete workout" is greyed while a session runs that workout.
 
 Next:
 1. Real App ID from apps.unawatch.com (`13F039C6FE024E86` is a local placeholder) and app icons in `Resources/`
