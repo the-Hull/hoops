@@ -7,6 +7,8 @@
 #include "SDK/Kernel/Kernel.hpp"
 #include "SDK/Messages/CommandMessages.hpp"
 #include "SDK/Metrics/MonotonicTime.hpp"
+#include "SDK/SensorLayer/SensorConnection.hpp"
+#include "SDK/SensorLayer/SensorDataBatch.hpp"
 
 #include "Storage.hpp"
 #include "score/History.hpp"
@@ -35,6 +37,8 @@ private:
     void finishSession(bool save);
     void restoreCurrent();
     void autosave();
+    void connectHr();
+    void handleSensorsData(uint16_t handle, SDK::Sensor::DataBatch& data);
     void vibro(SDK::Message::RequestVibroPlay::Effect effect, uint8_t count = 1, uint16_t silenceMs = 120);
     void backlightOn(uint32_t ms = 5000);
     uint32_t nowUnix() const;
@@ -46,6 +50,9 @@ private:
     Storage              mStorage;
     bool                 mGuiStarted = false;
     uint8_t              mSaveTicks = 0;           ///< running seconds since the last autosave
+    bool                 mHrSeen = false;          ///< first HR sample of the session logged
+    SDK::Sensor::Connection mSensorHr{SDK::Sensor::Type::HEART_RATE_EX, 1000, 1000};
+    SDK::Sensor::Connection mSensorWrist{SDK::Sensor::Type::WRIST_MOTION};
     score::SessionEngine mEngine;
     score::WorkoutStore  mWorkouts{};
     score::SessionIndex  mIndex{};

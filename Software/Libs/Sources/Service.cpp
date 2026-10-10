@@ -3,6 +3,9 @@
 #include <ctime>
 
 #include "SDK/Messages/MessageGuard.hpp"
+#include "SDK/Messages/SensorLayerMessages.hpp"
+#include "SDK/SensorLayer/DataParsers/SensorDataParserHeartRateEx.hpp"
+#include "SDK/SensorLayer/DataParsers/SensorDataParserWristMotion.hpp"
 
 #include "Commands.hpp"
 #include "score/Stats.hpp"
@@ -43,6 +46,8 @@ void Service::run()
             switch (msg->getType()) {
                 case SDK::MessageType::COMMAND_APP_STOP:
                     LOG_INFO("Force exit from the application\n");
+                    mSensorHr.disconnect();
+                    mSensorWrist.disconnect();
                     // We must release message because this is the last event.
                     mKernel.comm.releaseMessage(msg);
                     return;
@@ -50,6 +55,7 @@ void Service::run()
                 case SDK::MessageType::COMMAND_APP_NOTIF_GUI_RUN:
                     LOG_INFO("GUI is now running\n");
                     mGuiStarted = true;
+                    if (!mSensorWrist.connect()) LOG_WARNING("wrist motion connect failed\n");
                     sendLocalTime();
                     pushSnapshot();
                     LOG_INFO("snapshot pushed (state %u)\n", static_cast<unsigned>(mEngine.state()));
@@ -58,7 +64,14 @@ void Service::run()
                 case SDK::MessageType::COMMAND_APP_NOTIF_GUI_STOP:
                     LOG_INFO("GUI has stopped\n");
                     mGuiStarted = false;
+                    mSensorWrist.disconnect();
                     break;
+
+                case SDK::MessageType::EVENT_SENSOR_LAYER_DATA: {
+                    auto event = static_cast<SDK::Message::Sensor::EventData*>(msg);
+                    SDK::Sensor::DataBatch batch(event->data, event->count, event->stride);
+                    handleSensorsData(event->handle, batch);
+                } break;
 
                 default:
                     handleMessage(msg);
@@ -84,9 +97,10 @@ void Service::handleMessage(SDK::MessageBase* msg)
     switch (msg->getType()) {
         case CustomMessage::START_OPEN: {
             const auto* m = static_cast<CustomMessage::StartOpen*>(msg);
-            if (mEngine.startOpen(static_cast<score::Spot>(m->spot), nowUnix()))
+            if (mEngine.startOpen(static_cast<score::Spot>(m->spot), nowUnix())) {
                 autosave();
-            else
+                connectHr();
+            } else
                 LOG_WARNING("START_OPEN refused (spot %u)\n", m->spot);
             pushSnapshot();
         } break;
@@ -95,9 +109,10 @@ void Service::handleMessage(SDK::MessageBase* msg)
             const uint8_t id = static_cast<CustomMessage::StartWorkout*>(msg)->workoutId;
             const score::Workout* w = score::findPreset(id);
             if (!w) w = mWorkouts.find(id);
-            if (w && mEngine.startWorkout(*w, nowUnix()))
+            if (w && mEngine.startWorkout(*w, nowUnix())) {
                 autosave();
-            else
+                connectHr();
+            } else
                 LOG_WARNING("START_WORKOUT refused (id %u)\n", id);
             pushSnapshot();
         } break;
@@ -337,6 +352,7 @@ void Service::finishSession(bool save)
         return;
     }
     const score::Session& s = mEngine.end();
+    mSensorHr.disconnect();
     mStorage.clearCurrent();
     mSaveTicks = 0;
     if (save) {
@@ -417,6 +433,7 @@ void Service::restoreCurrent()
         LOG_INFO("session %lu restored (%u shots, workout %u%s)\n", static_cast<unsigned long>(mLoaded.id),
                  mLoaded.count, wid, (wid != 0 && !w) ? " gone, continuing open" : "");
         autosave();   // persist the Paused state (and any open-session fallback)
+        connectHr();
     } else {
         LOG_WARNING("current.bin rejected by restore, deleting\n");
         mStorage.clearCurrent();
@@ -428,6 +445,32 @@ void Service::autosave()
 {
     mSaveTicks = 0;
     if (mEngine.isActive()) mStorage.saveCurrent(mEngine.session());
+}
+
+void Service::connectHr()
+{
+    mHrSeen = false;
+    if (!mSensorHr.isConnected() && !mSensorHr.connect()) LOG_WARNING("heart rate connect failed\n");
+}
+
+void Service::handleSensorsData(uint16_t handle, SDK::Sensor::DataBatch& data)
+{
+    if (data.size() == 0) return;
+    if (mSensorHr.matchesDriver(handle)) {
+        SDK::SensorDataParser::HeartRateEx parser(data[0]);
+        if (!parser.isDataValid() || parser.getTrustLevel() <= 0.f || !mEngine.isActive()) return;
+        const float bpm = parser.getBpm();
+        if (bpm < 30.f || bpm > 220.f) return;
+        mEngine.addHr(static_cast<uint8_t>(bpm));
+        if (!mHrSeen) {
+            mHrSeen = true;
+            LOG_INFO("first HR sample: %u bpm (trust %.1f)\n", static_cast<unsigned>(bpm),
+                     static_cast<double>(parser.getTrustLevel()));
+        }
+    } else if (mSensorWrist.matchesDriver(handle)) {
+        SDK::SensorDataParser::WristMotion parser(data[0]);
+        if (parser.isDataValid() && mEngine.isActive()) backlightOn();
+    }
 }
 
 uint32_t Service::nowUnix() const
