@@ -104,6 +104,16 @@ void lateSelectClick()
     lv_obj_send_event(lv_screen_active(), LV_EVENT_KEY, &key);
 }
 
+// Session 1 at its second pause, 8/8: a 520 ms BACK press resumed (its
+// HoldRelease), and the late BACK CLICK 100 ms after the release counted
+// no miss on whichever screen it reached.
+bool noLateMiss(const Model& m)
+{
+    return onScreen(ScreenId::Active) && m.hasSnapshot()
+        && m.snapshot().state == static_cast<uint8_t>(score::SessionState::Active)
+        && m.snapshot().totalMakes == 8 && m.snapshot().totalAttempts == 8;
+}
+
 // End & save on a session without shots: dropped (SAVED 0), Home says so.
 bool emptyNotSaved(const Model& m)
 {
@@ -578,6 +588,11 @@ const Step kSteps[] = {
     { 1500, onPause, "on Pause",
                              '3', "Pause: SELECT Resume -> Active" },
     { 1200, backOnActive, "resumed onto Active (stale Paused ignored)",
+                             '2', "Active: DOWN -> pause, Pause" },
+    {  800, nullptr, nullptr, 'r', "Pause: BACK press (long)" },
+    {  520, nullptr, nullptr, 'f', "Pause: BACK release after 520 ms (HoldRelease) -> resume, Active" },
+    {  100, nullptr, nullptr, '4', "BACK CLICK 100 ms after the release (late; RELEASE before CLICK)" },
+    { 1000, noLateMiss, "late BACK CLICK after a hold-release navigation swallowed: Active, no miss, 8/8",
                              '2', "Active: DOWN -> pause, Pause" },
     {  800, nullptr, nullptr, '2', "Pause: DOWN -> End & save" },
     {  500, nullptr, nullptr, '3', "Pause: SELECT End & save -> SAVED -> Results" },

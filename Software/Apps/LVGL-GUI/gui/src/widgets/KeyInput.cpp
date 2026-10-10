@@ -48,6 +48,22 @@ constexpr KeyInput::Action kNone = { KeyInput::Kind::None, KeyInput::Btn::None }
 
 } // namespace
 
+KeyInput::LastHoldRelease KeyInput::sLastHoldRelease = { Btn::None, 0 };
+
+void KeyInput::noteHoldRelease(Btn btn)
+{
+    sLastHoldRelease = { btn, lv_tick_get() };
+}
+
+bool KeyInput::lateClickAfterHoldRelease(Btn btn)
+{
+    if (sLastHoldRelease.btn != btn || lv_tick_elaps(sLastHoldRelease.tick) > kLateClickMs) {
+        return false;
+    }
+    sLastHoldRelease.btn = Btn::None;   // one CLICK per press
+    return true;
+}
+
 KeyInput::KeyInput(Callback cb, void* ctx)
     : mCb(cb)
     , mCtx(ctx)
@@ -66,6 +82,7 @@ KeyInput::Action KeyInput::feed(uint8_t code)
     switch (d.code) {
         case Code::Press:
             flushRelease();   // the previous press ends before this one starts
+            sLastHoldRelease.btn = Btn::None;   // a new press: no late CLICK can be pending
             stopTimer();
             mPressed   = d.btn;
             mSuppress  = Btn::None;
@@ -89,6 +106,7 @@ KeyInput::Action KeyInput::feed(uint8_t code)
                 // >= kHoldMs: the kernel sends no CLICK for it (a stray one
                 // stays swallowed by mSuppress until the next PRESS).
                 mHoldFired = false;
+                noteHoldRelease(d.btn);
                 return { Kind::HoldRelease, d.btn };
             }
             // Short, and no CLICK yet: it may still come after this RELEASE.
@@ -106,6 +124,9 @@ KeyInput::Action KeyInput::feed(uint8_t code)
                 return { Kind::Click, d.btn };
             }
             flushRelease();           // another button: the pending press ends first
+            if (lateClickAfterHoldRelease(d.btn)) {
+                return kNone;         // that press already ended as a HoldRelease (maybe on another screen)
+            }
             if (d.btn == mSuppress) {
                 return kNone;         // the Hold fired: the RELEASE reports this press
             }
@@ -155,6 +176,8 @@ void KeyInput::flushRelease()
     }
     const Btn btn = mReleaseBtn;
     stopReleaseTimer();
+    mSuppress = btn;          // a CLICK still to come on this screen is swallowed...
+    noteHoldRelease(btn);     // ...and on the next one, within kLateClickMs
     deliver({ Kind::HoldRelease, btn });
 }
 

@@ -26,6 +26,13 @@
  *   swallows any CLICK for that press, until the next PRESS.
  * - A RELEASE with no PRESS before it on this screen (the press happened on
  *   the previous screen) is ignored.
+ * - A CLICK that comes after its press already ended as a HoldRelease (the
+ *   watch may send RELEASE before CLICK; a 400-500 ms press can end as a
+ *   HoldRelease and navigate first) is dropped by every KeyInput: each
+ *   HoldRelease is recorded in sLastHoldRelease {button, tick}, and a CLICK
+ *   of that button within kLateClickMs of it, with no PRESS of any button
+ *   in between, is swallowed. Time-bounded, so a bare CLICK later (the
+ *   self-test sends some without a PRESS) still counts.
  *
  * So a slow press is never lost and a short one never counts twice: screens
  * act on isActivate() (Click or HoldRelease), from feed()'s result and from
@@ -83,6 +90,9 @@ public:
     /// timers run, so a CLICK queued right behind its RELEASE reaches us
     /// one frame later: the grace covers a full frame plus jitter.
     static constexpr uint32_t kReleaseGraceMs = 150;
+    /// After a HoldRelease, a CLICK of the same button is its late echo for
+    /// this long (or until the next PRESS), on whichever screen it lands.
+    static constexpr uint32_t kLateClickMs = 250;
 
 private:
     void stopTimer();
@@ -90,6 +100,17 @@ private:
     /// Deliver the waiting HoldRelease now, if any.
     void flushRelease();
     void deliver(Action a);
+
+    struct LastHoldRelease {
+        Btn      btn;    ///< None = nothing pending
+        uint32_t tick;   ///< lv_tick_get() at the HoldRelease
+    };
+    /// The last HoldRelease, shared by all instances (a screen switch makes a
+    /// new KeyInput, and the late CLICK lands there).
+    static LastHoldRelease sLastHoldRelease;
+    static void noteHoldRelease(Btn btn);
+    /// True (and forgotten) if a CLICK of @p btn is the late echo of it.
+    static bool lateClickAfterHoldRelease(Btn btn);
     static void timerCb(lv_timer_t* t);
     static void releaseTimerCb(lv_timer_t* t);
 
