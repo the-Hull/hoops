@@ -1,0 +1,6 @@
+.venv/
+build/
+build-*/
+Output/
+Software/Output/
+*.bak

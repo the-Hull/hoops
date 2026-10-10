@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hoops · Shooting, workout step</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#00AAAA}a:hover{color:#007777}
+</style>
+</helmet>
+<div style="width:600px;height:500px;position:relative;overflow:hidden;background:#E9EAEC;font-family:'Barlow',sans-serif;color:#16181B">
+<div style="position:absolute;left:205px;top:0;width:190px;height:500px;border-radius:28px;background:#1B1C1E"></div>
+<div style="position:absolute;left:131px;top:114px;width:18px;height:48px;border-radius:6px;background:#3A3D41;transform:rotate(35deg)"></div>
+<div style="position:absolute;left:131px;top:338px;width:18px;height:48px;border-radius:6px;background:#3A3D41;transform:rotate(-35deg)"></div>
+<div style="position:absolute;left:451px;top:114px;width:18px;height:48px;border-radius:6px;background:#3A3D41;transform:rotate(-35deg)"></div>
+<div style="position:absolute;left:451px;top:338px;width:18px;height:48px;border-radius:6px;background:#3A3D41;transform:rotate(35deg)"></div>
+<div style="position:absolute;left:110px;top:60px;width:380px;height:380px;border-radius:50%;background:#26282B;box-shadow:0 18px 40px rgba(0,0,0,0.35)"></div>
+<div style="position:absolute;left:121px;top:146px;width:80px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#B8BBBF;transform:rotate(-55deg)">UP</div>
+<div style="position:absolute;left:121px;top:340px;width:80px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#B8BBBF;transform:rotate(55deg)">DOWN</div>
+<div style="position:absolute;left:399px;top:146px;width:80px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#B8BBBF;transform:rotate(55deg)">SELECT</div>
+<div style="position:absolute;left:399px;top:340px;width:80px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#B8BBBF;transform:rotate(-55deg)">BACK</div>
+
+<div style="position:absolute;left:150px;top:100px;width:300px;height:300px;border-radius:50%;background:#000000;overflow:hidden;color:#FFFFFF">
+<svg width="300" height="300" viewBox="0 0 300 300" style="position:absolute;left:0;top:0" aria-label="Step progress: 10 segments, 5 makes, 2 misses, 3 shots left">
+<g fill="none" stroke-width="10" transform="rotate(-88.4 150 150)">
+<circle cx="150" cy="150" r="140" stroke="#55FF55" stroke-dasharray="79.97 799.68" stroke-dashoffset="0"></circle>
+<circle cx="150" cy="150" r="140" stroke="#55FF55" stroke-dasharray="79.97 799.68" stroke-dashoffset="-87.97"></circle>
+<circle cx="150" cy="150" r="140" stroke="#FF5555" stroke-dasharray="79.97 799.68" stroke-dashoffset="-175.93"></circle>
+<circle cx="150" cy="150" r="140" stroke="#55FF55" stroke-dasharray="79.97 799.68" stroke-dashoffset="-263.9"></circle>
+<circle cx="150" cy="150" r="140" stroke="#FF5555" stroke-dasharray="79.97 799.68" stroke-dashoffset="-351.86"></circle>
+<circle cx="150" cy="150" r="140" stroke="#55FF55" stroke-dasharray="79.97 799.68" stroke-dashoffset="-439.83"></circle>
+<circle cx="150" cy="150" r="140" stroke="#55FF55" stroke-dasharray="79.97 799.68" stroke-dashoffset="-527.79"></circle>
+<circle cx="150" cy="150" r="140" stroke="#555555" stroke-dasharray="79.97 799.68" stroke-dashoffset="-615.76"></circle>
+<circle cx="150" cy="150" r="140" stroke="#555555" stroke-dasharray="79.97 799.68" stroke-dashoffset="-703.72"></circle>
+<circle cx="150" cy="150" r="140" stroke="#555555" stroke-dasharray="79.97 799.68" stroke-dashoffset="-791.69"></circle>
+</g>
+</svg>
+<div style="position:absolute;left:250px;top:58px;width:22px;height:22px;border-radius:50%;background:#55FF55;display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#000000" stroke-width="2.4"><path d="M2 6.5l2.6 2.6L10 3.5"></path></svg></div>
+<div style="position:absolute;left:250px;top:218px;width:22px;height:22px;border-radius:50%;background:#FF5555;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#000000" stroke-width="2.4"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"></path></svg></div>
+<div style="position:absolute;left:28px;top:58px;width:22px;height:22px;border-radius:50%;background:#FFFFFF;display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#000000" stroke-width="2"><path d="M4 2L1.5 4.5 4 7"></path><path d="M1.5 4.5H7a3.5 3.5 0 010 7H5"></path></svg></div>
+<div style="position:absolute;left:28px;top:218px;width:22px;height:22px;border-radius:50%;background:#FFFFFF;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 10 10" fill="#000000"><rect x="1.5" y="1" width="2.4" height="8"></rect><rect x="6.1" y="1" width="2.4" height="8"></rect></svg></div>
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+<div style="font-size:13px;font-weight:600;letter-spacing:0.14em;color:#AAAAAA">STEP 2 / 4</div>
+<div style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px;letter-spacing:0.06em;color:#00AAAA">MID · R-ELBOW</div>
+<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:80px;line-height:0.95;margin-top:2px">5<span style="color:#AAAAAA;font-size:54px">/7</span></div>
+<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;line-height:1;color:#55FF55">71 %</div>
+<div style="margin-top:8px;font-size:16px;font-weight:600">3 shots left</div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:14px;font-weight:600;color:#AAAAAA">18:05 ·
+<svg width="13" height="12" viewBox="0 0 13 12" fill="#FF5555"><path d="M6.5 11.5L1.2 6.2a3.2 3.2 0 014.6-4.5l.7.7.7-.7a3.2 3.2 0 014.6 4.5z"></path></svg>156</div>
+</div>
+</div>
+
+<div style="position:absolute;left:4px;top:112px;width:112px;text-align:right">
+<div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:#5F6268">UP</div>
+<div style="font-size:16px;font-weight:700;line-height:1.2;margin-top:3px">Undo last</div>
+</div>
+<div style="position:absolute;left:4px;top:336px;width:112px;text-align:right">
+<div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:#5F6268">DOWN</div>
+<div style="font-size:16px;font-weight:700;line-height:1.2;margin-top:3px">Pause</div>
+</div>
+<div style="position:absolute;left:484px;top:112px;width:112px">
+<div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:#5F6268">SELECT</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:16px;font-weight:700;line-height:1.2;margin-top:3px"><span style="width:10px;height:10px;border-radius:50%;background:#55FF55;box-shadow:0 0 0 1px #16181B"></span>MAKE</div>
+</div>
+<div style="position:absolute;left:484px;top:336px;width:112px">
+<div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:#5F6268">BACK</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:16px;font-weight:700;line-height:1.2;margin-top:3px"><span style="width:10px;height:10px;border-radius:50%;background:#FF5555;box-shadow:0 0 0 1px #16181B"></span>MISS</div>
+<div style="font-size:12px;color:#5F6268;margin-top:2px">10th shot: long buzz, step done</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":600,"height":500}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
