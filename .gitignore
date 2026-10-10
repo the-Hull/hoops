@@ -4,3 +4,4 @@ build-*/
 Output/
 Software/Output/
 *.bak
+.superpowers/
