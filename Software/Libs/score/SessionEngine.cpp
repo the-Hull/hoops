@@ -220,6 +220,15 @@ uint16_t SessionEngine::stepMakes() const
     return m;
 }
 
+uint8_t SessionEngine::currentStreak() const
+{
+    // Across spot changes and workout steps: the run of makes ending at the last shot.
+    const uint16_t n = mSession.count < kMaxShots ? mSession.count : kMaxShots;
+    uint8_t streak = 0;
+    for (uint16_t i = n; i > 0 && streak < 255 && mSession.shots[i - 1].made; --i) ++streak;
+    return streak;
+}
+
 Snapshot SessionEngine::snapshot() const
 {
     Snapshot s{};
@@ -262,6 +271,7 @@ Snapshot SessionEngine::snapshot() const
     s.restRemaining_s = mSession.restRemaining_s;
     s.stepElapsed_s   = mSession.stepElapsed_s;
     s.hr              = mLastHr;
+    s.streak          = currentStreak();
     s.workoutId       = mSession.workoutId;
     if (mSession.count >= kMaxShots) s.flags |= Snapshot::kFull;
     if (mSession.workoutDone)        s.flags |= Snapshot::kWorkoutDone;

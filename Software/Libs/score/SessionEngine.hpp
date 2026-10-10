@@ -25,7 +25,7 @@ struct Snapshot {
     uint8_t  pad0[2];
     uint32_t elapsed_s;
     uint16_t restRemaining_s, stepElapsed_s;
-    uint8_t  hr, flags, nextSpot, pad;
+    uint8_t  hr, flags, nextSpot, streak;   // streak: trailing makes of the session, ≤ 255
     uint16_t workoutId;
     uint8_t  pad1[2];
     // Current step's shots, bit i = i-th shot (1 = made), first 64. Two
@@ -40,6 +40,7 @@ static_assert(sizeof(Snapshot) == 48, "Snapshot must fit an IPC message");
 static_assert(offsetof(Snapshot, stepBitsLo) == 40 && offsetof(Snapshot, stepBitsHi) == 44, "Snapshot layout changed");
 static_assert(alignof(Snapshot) <= 4, "Snapshot must fit 4-byte-aligned message blocks");
 static_assert(offsetof(Snapshot, elapsed_s) == 24, "Snapshot layout changed");
+static_assert(offsetof(Snapshot, streak) == 35, "Snapshot layout changed");
 static_assert(std::has_unique_object_representations<Snapshot>::value, "Snapshot: no padding");
 
 class SessionEngine {
@@ -62,6 +63,7 @@ public:
     const Session& session() const;  const Workout* workout() const;
     const StepResult& lastStep() const;
     Snapshot snapshot() const;
+    uint8_t  currentStreak() const;                          ///< trailing makes, whole session, capped at 255
 
 private:
     Event completeStep();  void advanceStep();  const Step& step() const;

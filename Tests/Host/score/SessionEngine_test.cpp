@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "score/SessionEngine.hpp"
+#include <initializer_list>
 using namespace score;
 
 TEST(EngineOpen, StartAndShoot) { SessionEngine e; ASSERT_TRUE(e.startOpen(Spot::LWing3, 1000));
@@ -101,3 +102,19 @@ TEST(EngineRestore, StepPastEditedWorkoutFallsBackToOpen) { SessionEngine a; Wor
   EXPECT_EQ(b.session().workoutId, 0); EXPECT_EQ(b.session().count, 4); EXPECT_EQ(b.workout(), nullptr);
   EXPECT_TRUE(b.resume()); EXPECT_EQ(b.state(), SessionState::Active); EXPECT_EQ(b.shot(true), SessionEngine::Event::None);
   EXPECT_EQ(b.session().count, 5); EXPECT_TRUE(b.changeSpot(Spot::LayupL)); }
+
+static void shots(SessionEngine& e, std::initializer_list<bool> made) { for (bool m : made) e.shot(m); }
+TEST(EngineStreak, StreakCountsTrailingMakes) { SessionEngine e; e.startOpen(Spot::Ft, 1); EXPECT_EQ(e.currentStreak(), 0);
+  shots(e, { true, true, false, true, true, true }); EXPECT_EQ(e.currentStreak(), 3); }
+TEST(EngineStreak, StreakResetsOnMiss) { SessionEngine e; e.startOpen(Spot::Ft, 1); shots(e, { true, true, true });
+  ASSERT_EQ(e.currentStreak(), 3); e.shot(false); EXPECT_EQ(e.currentStreak(), 0); }
+TEST(EngineStreak, StreakSurvivesSpotChange) { SessionEngine e; e.startOpen(Spot::Ft, 1); shots(e, { true, true });
+  ASSERT_TRUE(e.changeSpot(Spot::Top3)); e.shot(true); EXPECT_EQ(e.currentStreak(), 3); }
+TEST(EngineStreak, UndoRecomputesStreak) { SessionEngine e; e.startOpen(Spot::Ft, 1); bool m;
+  shots(e, { true, true, true }); ASSERT_TRUE(e.undo(m)); EXPECT_EQ(e.currentStreak(), 2);
+  SessionEngine f; f.startOpen(Spot::Ft, 1); shots(f, { true, false }); ASSERT_EQ(f.currentStreak(), 0);
+  ASSERT_TRUE(f.undo(m)); EXPECT_EQ(f.currentStreak(), 1); }
+TEST(EngineStreak, SnapshotCarriesStreak) { SessionEngine e; e.startOpen(Spot::Ft, 1); EXPECT_EQ(e.snapshot().streak, 0);
+  shots(e, { false, true, true }); EXPECT_EQ(e.snapshot().streak, e.currentStreak()); EXPECT_EQ(e.snapshot().streak, 2); }
+TEST(EngineStreak, StreakCapsAt255) { SessionEngine e; e.startOpen(Spot::Ft, 1); for (int i = 0; i < 300; ++i) e.shot(true);
+  ASSERT_EQ(e.session().count, 300); EXPECT_EQ(e.currentStreak(), 255); EXPECT_EQ(e.snapshot().streak, 255); }
