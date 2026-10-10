@@ -9,6 +9,7 @@
 #include "score/Spots.hpp"
 
 #include <cstdint>
+#include <type_traits>
 
 namespace score {
 
@@ -31,6 +32,7 @@ struct SessionStats {
     uint8_t  streakSpot;      ///< spot where the streak ended, kNoSpot if 0
     uint8_t  bestSpot;        ///< ≥ kMinAttemptsForRank attempts, else kNoSpot
     uint8_t  worstSpot;
+    uint8_t  pad0[3];         ///< zero; sent verbatim over IPC
     uint32_t elapsed_s;
     uint16_t shotsPerMin10;   ///< shots/min × 10
     uint8_t  hrAvg;
@@ -38,5 +40,6 @@ struct SessionStats {
 
     static SessionStats compute(const Session& s);
 };
+static_assert(std::has_unique_object_representations<SessionStats>::value, "SessionStats: no padding");
 
 } // namespace score
