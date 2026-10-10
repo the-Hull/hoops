@@ -5,7 +5,8 @@
  *
  * Menu (docs/mockup-layout.md §1): "Resume session" first while the service
  * reports a session in progress, then Open Session, Workouts, History and
- * Settings (dim, no action yet). UP / DOWN move, SELECT opens, BACK exits
+ * Settings (dim, no action yet); with it an amber "Session in progress" line
+ * under the header (which moves up for it). UP / DOWN move, SELECT opens, BACK exits
  * the app, or goes to Pause while a session is in progress. The footer
  * "Last · d.m. · pp %" comes from the service's history (newest first).
  ******************************************************************************
@@ -57,6 +58,8 @@ private:
     std::unique_ptr<Hints>    mHints;
     std::unique_ptr<ListMenu> mMenu;
     lv_obj_t*                 mFooter = nullptr;
+    lv_obj_t*                 mHeader = nullptr;
+    lv_obj_t*                 mHint   = nullptr;   ///< "Session in progress"
 
     ListMenu::Item mItems[kMaxItems]   = {};
     Action         mActions[kMaxItems] = {};

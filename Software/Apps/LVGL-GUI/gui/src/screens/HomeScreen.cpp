@@ -16,6 +16,11 @@ namespace
 {
 
 constexpr int32_t kFooterY = 193;
+constexpr int32_t kHeaderY = 47;
+// A session in progress: the header moves up to make room for the hint
+// line, both clear of the menu pill (top at y 61).
+constexpr int32_t kHeaderUpY = 32;
+constexpr int32_t kHintY     = 50;
 
 } // namespace
 
@@ -27,7 +32,10 @@ HomeScreen::HomeScreen(Model& model)
 
 void HomeScreen::build()
 {
-    Theme::header(mRoot, "HOOPS", 47);
+    mHeader = Theme::header(mRoot, "HOOPS", kHeaderY);
+    mHint   = Theme::label(mRoot, Theme::Font::Regular14, "Session in progress", 20,
+                           Theme::topFor(Theme::Font::Regular14, kHintY), 200, LV_TEXT_ALIGN_CENTER, Theme::kAmber);
+    Theme::setHidden(mHint, true);
 
     mMenu = std::make_unique<ListMenu>(mRoot, ListMenu::homeGeometry());
 
@@ -70,8 +78,14 @@ void HomeScreen::updateItems()
     }
 
     // Keep the selected action across the change; the first build selects
-    // the action in homeIndex. Without that action (Resume gone): the first row.
-    const Action current = mCount > 0 ? mActions[mMenu->selected()] : static_cast<Action>(mModel.homeIndex);
+    // the action in homeIndex. Without that action (Resume gone): the first
+    // row. A session restored after a crash (kResumable, until resumed)
+    // selects Resume; a stale running snapshot (e.g. after a discard) must
+    // not move the selection.
+    Action current = mCount > 0 ? mActions[mMenu->selected()] : static_cast<Action>(mModel.homeIndex);
+    if (resume && !mHasResume && (mModel.snapshot().flags & score::Snapshot::kResumable)) {
+        current = Action::Resume;
+    }
 
     mCount     = 0;
     mHasResume = resume;
@@ -95,6 +109,9 @@ void HomeScreen::updateItems()
         }
     }
     mMenu->setItems(mItems, mCount, sel);
+
+    Theme::setHidden(mHint, !resume);
+    lv_obj_set_y(mHeader, Theme::topFor(Theme::Font::Regular14, resume ? kHeaderUpY : kHeaderY));
 }
 
 void HomeScreen::updateFooter()

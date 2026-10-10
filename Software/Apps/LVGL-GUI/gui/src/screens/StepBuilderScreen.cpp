@@ -168,6 +168,7 @@ StepBuilderScreen::~StepBuilderScreen()
         lv_timer_delete(mToastTimer);
         mToastTimer = nullptr;
     }
+    setBusy(false);
 }
 
 score::Step& StepBuilderScreen::step()
@@ -417,12 +418,14 @@ void StepBuilderScreen::fillItems()
         mItems[mItemCount] = it;
         ++mItemCount;
     };
-    // Next step is the only way forward to a later step (BACK goes back).
+    // Add step / Save workout always lead, so the menu opens on the same
+    // rows on every step. Next step is the only way forward to a later step
+    // (BACK goes back).
+    add(kAddStep, { "Add step", nullptr, n < score::kMaxSteps ? 0u : Theme::kDim });
+    add(kSave, { "Save workout", nullptr, 0 });
     if (mModel.draftStep + 1 < n) {
         add(kNextStep, { "Next step", nullptr, 0 });
     }
-    add(kAddStep, { "Add step", nullptr, n < score::kMaxSteps ? 0u : Theme::kDim });
-    add(kSave, { "Save workout", nullptr, 0 });
     add(kDeleteStep, { "Delete step", nullptr, n > 1 ? Theme::kBad : Theme::kDim });
     if (!mModel.draftIsNew) {   // a new draft has nothing stored to delete
         add(kDeleteWorkout, mConfirming ? kConfirmItem : kDeleteWorkoutItem);
@@ -461,7 +464,7 @@ void StepBuilderScreen::menuSelect()
             setConfirm(false);
             // The service answers with the refreshed list, which the
             // Workouts screen picks up (onWorkouts()).
-            mBusy = true;
+            setBusy(true);
             mModel.deleteWorkout(mModel.draft().id);
             mModel.draft() = score::Workout {};
             ScreenManager::instance().goTo(ScreenId::Workouts);
@@ -525,7 +528,7 @@ void StepBuilderScreen::save()
             d.steps[i] = score::Step {};
         }
     }
-    mBusy = true;
+    setBusy(true);
     mModel.saveWorkout(d);   // WORKOUT_SAVED -> onWorkoutSaved()
 }
 
@@ -546,6 +549,27 @@ void StepBuilderScreen::setConfirm(bool on)
 void StepBuilderScreen::confirmTimerCb(lv_timer_t* t)
 {
     static_cast<StepBuilderScreen*>(lv_timer_get_user_data(t))->setConfirm(false);   // deletes the timer
+}
+
+void StepBuilderScreen::setBusy(bool on)
+{
+    if (mBusyTimer) {
+        lv_timer_delete(mBusyTimer);
+        mBusyTimer = nullptr;
+    }
+    mBusy = on;
+    if (on) {
+        mBusyTimer = lv_timer_create(&StepBuilderScreen::busyTimerCb, kBusyMs, this);
+    }
+}
+
+void StepBuilderScreen::busyTimerCb(lv_timer_t* t)
+{
+    // No WORKOUT_SAVED in time (e.g. the message was lost): give the keys
+    // back rather than leave the screen dead.
+    auto* self = static_cast<StepBuilderScreen*>(lv_timer_get_user_data(t));
+    self->setBusy(false);   // deletes the timer
+    self->toast("No reply");
 }
 
 void StepBuilderScreen::toast(const char* text)
@@ -608,9 +632,9 @@ void StepBuilderScreen::onWorkoutSaved(uint8_t id)
     if (!mBusy) {
         return;
     }
+    setBusy(false);
     if (id == 0) {
         // Refused: the store is full (an add) or the workout is gone.
-        mBusy = false;
         toast(mModel.draftIsNew ? "Store full (10)" : "Save failed");
         return;
     }

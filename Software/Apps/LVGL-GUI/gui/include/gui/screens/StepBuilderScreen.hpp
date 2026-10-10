@@ -9,15 +9,17 @@
  * it (Spot and Goal type cycle, Value and Rest step through their lists and
  * stop at the ends). SELECT moves on: on Spot it opens the full SpotPicker
  * (which comes back on Goal type), after Rest a mini-menu: Add step / Save
- * workout / Delete step, plus Next step on any step but the last and Delete
- * workout (asked twice) for a stored workout. BACK goes a field back, to the previous step's Rest, or on the
+ * workout / Next step (on any step but the last) / Delete step / Delete
+ * workout (asked twice; a stored workout only). BACK goes a field back, to the previous step's Rest, or on the
  * first field of the first step drops the draft and returns to the list.
  *
  * Nothing reaches the service before Save: SAVE_WORKOUT is answered by
  * WORKOUT_SAVED (id 0 = refused, e.g. a full store; a toast then says so)
  * and the refreshed list. On an id the preview of the saved workout opens;
  * the list held is marked stale first (requestWorkouts()), so the preview
- * waits for the fresh one rather than show the workout as it was.
+ * waits for the fresh one rather than show the workout as it was. Keys are
+ * ignored while a SAVE / DELETE is out; after kBusyMs without a reply they
+ * come back with a "No reply" toast.
  ******************************************************************************
  */
 
@@ -44,6 +46,7 @@ public:
 
     static constexpr uint32_t kConfirmMs = 3000;   ///< Delete workout confirmation window
     static constexpr uint32_t kToastMs   = 2000;
+    static constexpr uint32_t kBusyMs    = 3000;   ///< SAVE / DELETE reply watchdog
 
 protected:
     void build() override;
@@ -72,10 +75,13 @@ private:
     void goToStep(uint8_t index, uint8_t field);
     void save();
     void setConfirm(bool on);
+    /// mBusy, with the kBusyMs watchdog that clears it.
+    void setBusy(bool on);
     void toast(const char* text);
 
     static void confirmTimerCb(lv_timer_t* t);
     static void toastTimerCb(lv_timer_t* t);
+    static void busyTimerCb(lv_timer_t* t);
 
     KeyInput                  mKeys;
     std::unique_ptr<ListMenu> mMenu;
@@ -102,6 +108,7 @@ private:
 
     lv_timer_t* mConfirmTimer = nullptr;
     lv_timer_t* mToastTimer   = nullptr;
+    lv_timer_t* mBusyTimer    = nullptr;
     const char* mToastText    = nullptr;   ///< shown in place of the menu's summary line
     bool        mConfirming   = false;
     bool        mBusy         = false;     ///< SAVE / DELETE sent: keys ignored

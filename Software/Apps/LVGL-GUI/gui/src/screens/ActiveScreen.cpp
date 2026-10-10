@@ -47,6 +47,8 @@ constexpr int32_t kToastY    = 171;
 constexpr int32_t kToastMinW = 129;
 constexpr int32_t kToastH    = 27;
 constexpr int32_t kToastPad  = 12;
+constexpr int32_t kToastMaxW = 196;   // inside the round edge at y 158..185
+constexpr Font kToastFonts[] = { Font::SemiBold20, Font::Medium18, Font::Regular16 };
 
 const Layout& layoutFor(bool workout) { return workout ? kWorkout : kOpen; }
 
@@ -54,7 +56,7 @@ const Layout& layoutFor(bool workout) { return workout ? kWorkout : kOpen; }
 
 ActiveScreen::ActiveScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&ActiveScreen::onHold, this)
 {
 }
 
@@ -363,12 +365,23 @@ void ActiveScreen::showFooter(uint32_t elapsed_s, uint8_t hr)
 
 void ActiveScreen::showToast(const char* text, uint32_t ms)
 {
-    int32_t w = Theme::textWidth(Font::SemiBold20, text) + 2 * kToastPad;
+    // The first face whose pill fits the round screen, else the smallest.
+    Font f    = kToastFonts[0];
+    int32_t w = 0;
+    for (const Font cand : kToastFonts) {
+        f = cand;
+        w = Theme::textWidth(f, text) + 2 * kToastPad;
+        if (w <= kToastMaxW) {
+            break;
+        }
+    }
     if (w < kToastMinW) {
         w = kToastMinW;
     }
     lv_obj_set_x(mToast, 120 - w / 2);
     lv_obj_set_width(mToast, w);
+    lv_obj_set_style_text_font(mToastText, Theme::font(f), LV_PART_MAIN);
+    lv_obj_set_y(mToastText, Theme::topFor(f, kToastY));
     Theme::setText(mToastText, text);
     Theme::setHidden(mToast, false);
     Theme::setHidden(mToastText, false);
@@ -384,6 +397,7 @@ void ActiveScreen::showToast(const char* text, uint32_t ms)
 
 void ActiveScreen::hideToast()
 {
+    mHoldToast = false;
     if (mToastTimer) {
         lv_timer_delete(mToastTimer);
         mToastTimer = nullptr;
@@ -417,8 +431,21 @@ void ActiveScreen::pauseNow()
     ScreenManager::instance().goTo(ScreenId::Pause);
 }
 
+void ActiveScreen::onHold(void* ctx, KeyInput::Action a)
+{
+    // Open session, DOWN held past 500 ms: say what the release will do.
+    auto* self = static_cast<ActiveScreen*>(ctx);
+    if (a.btn == KeyInput::Btn::Down && !self->mWorkoutLayout) {
+        self->showToast("Release to change spot", kHoldToastMs);
+        self->mHoldToast = true;
+    }
+}
+
 void ActiveScreen::onKey(uint8_t code)
 {
+    if (mHoldToast) {
+        hideToast();   // any key ends the hold hint: the release, or another button
+    }
     const KeyInput::Action a = mKeys.feed(code);
     if (a.kind == KeyInput::Kind::HoldRelease && a.btn == KeyInput::Btn::Down) {
         // Open session: change spot. A workout has no spot to change, so a
@@ -487,4 +514,7 @@ void ActiveScreen::onUndoResult(bool ok, bool made)
 void ActiveScreen::onSuspend()
 {
     mKeys.cancel();
+    if (mHoldToast) {
+        hideToast();
+    }
 }

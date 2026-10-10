@@ -357,13 +357,17 @@ void Service::finishSession(bool save)
     mSaveTicks = 0;
     if (save) {
         mLastEndedId = s.id;
-        if (!mStorage.saveSession(s)) LOG_WARNING("session %lu: file not written\n", static_cast<unsigned long>(s.id));
-        const uint32_t evicted = mIndex.push(score::summarize(s, todayYmd()));
-        if (evicted != 0) {
-            mStorage.removeSession(evicted);
-            if (mLoaded.id == evicted) mLoaded = score::Session{};
+        if (mStorage.saveSession(s)) {
+            // Only a session whose file exists gets a row: History must not list what Results can't load.
+            const uint32_t evicted = mIndex.push(score::summarize(s, todayYmd()));
+            if (evicted != 0) {
+                mStorage.removeSession(evicted);
+                if (mLoaded.id == evicted) mLoaded = score::Session{};
+            }
+            mStorage.saveIndex(mIndex);
+        } else {
+            LOG_WARNING("session %lu: file not written, not indexed\n", static_cast<unsigned long>(s.id));
         }
-        mStorage.saveIndex(mIndex);
         vibro(Effect::STRONG_CLICK_100);
         backlightOn();
         SDK::send_msg<CustomMessage::Saved>(mKernel, s.id);
@@ -458,7 +462,10 @@ void Service::handleSensorsData(uint16_t handle, SDK::Sensor::DataBatch& data)
     if (data.size() == 0) return;
     if (mSensorHr.matchesDriver(handle)) {
         SDK::SensorDataParser::HeartRateEx parser(data[0]);
-        if (!parser.isDataValid() || parser.getTrustLevel() <= 0.f || !mEngine.isActive()) return;
+        // Active and Rest only: a paused session counts no heart rate.
+        if (!parser.isDataValid() || parser.getTrustLevel() <= 0.f || !mEngine.isActive() ||
+            mEngine.state() == score::SessionState::Paused)
+            return;
         const float bpm = parser.getBpm();
         if (bpm < 30.f || bpm > 220.f) return;
         mEngine.addHr(static_cast<uint8_t>(bpm));

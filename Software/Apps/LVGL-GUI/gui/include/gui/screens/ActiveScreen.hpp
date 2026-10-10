@@ -9,7 +9,8 @@
  * engine's Snapshot::stepBits). Keys: SELECT make, BACK miss, UP undo,
  * DOWN pause; holding DOWN in an open session opens the spot picker to
  * change spot, on the button's release so that release cannot reach the
- * picker (in a workout a hold pauses, like a click).
+ * picker (in a workout a hold pauses, like a click). While DOWN is held
+ * past the hold time a toast says "Release to change spot"; any key hides it.
  *
  * rebuild() branches on Snapshot::mode; both layouts share the number
  * group, the percentage and the footer (showBody()). A finished workout
@@ -44,6 +45,7 @@ public:
 
     static constexpr uint32_t kToastMs     = 2000;   ///< undo
     static constexpr uint32_t kStepToastMs = 1500;   ///< step done, no rest
+    static constexpr uint32_t kHoldToastMs = 10000;  ///< "Release to change spot", until a key
 
 protected:
     void build() override;
@@ -52,6 +54,7 @@ private:
     static constexpr uint8_t kLast5 = 5;
 
     static void toastTimerCb(lv_timer_t* t);
+    static void onHold(void* ctx, KeyInput::Action a);
 
     void changeSpot();
     void pauseNow();
@@ -96,6 +99,7 @@ private:
     lv_obj_t* mToast   = nullptr;
     lv_obj_t* mToastText = nullptr;
     lv_timer_t* mToastTimer = nullptr;
+    bool        mHoldToast  = false;   ///< the toast shown is the hold hint
     bool        mWorkoutLayout = false;
 
     // Snapshots the service sent before it handled the intent that brought

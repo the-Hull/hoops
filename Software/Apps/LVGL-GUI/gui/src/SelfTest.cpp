@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "lvgl.h"
@@ -38,13 +39,34 @@ struct Step {
     uint32_t    delayMs;   ///< wait before this step
     Check       check;     ///< runs first (on the state the earlier steps left), or nullptr
     const char* checkNote;
-    char        key;       ///< SDK::GUI::Button code then sent
+    char        key;       ///< SDK::GUI::Button code then sent; 0 = none
     const char* note;
+    void      (*after)() = nullptr;   ///< runs last, e.g. the phase-1 crash
 };
 
 bool onScreen(ScreenId id) { return ScreenManager::instance().current() == id; }
 
-bool stillActive(const Model&) { return onScreen(ScreenId::Active); }
+/// As findLabel(), but only through objects that are not hidden.
+bool findVisibleLabel(lv_obj_t* o, const char* text)
+{
+    if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) {
+        return false;
+    }
+    if (lv_obj_check_type(o, &lv_label_class) && strcmp(lv_label_get_text(o), text) == 0) {
+        return true;
+    }
+    const uint32_t n = lv_obj_get_child_count(o);
+    for (uint32_t i = 0; i < n; ++i) {
+        if (findVisibleLabel(lv_obj_get_child(o, i), text)) {
+            return true;
+        }
+    }
+    return false;
+}
+bool visibleLabel(const char* text) { return findVisibleLabel(lv_screen_active(), text); }
+
+// DOWN held past 500 ms in an open session: still on Active, with the hint.
+bool holdHint(const Model&) { return onScreen(ScreenId::Active) && visibleLabel("Release to change spot"); }
 
 bool pickerOnCurrentSpot(const Model& m)
 {
@@ -89,6 +111,11 @@ bool resultsPage1(const Model& m)
     return onScreen(ScreenId::Results) && m.resultsPage == 0 && onScreenLabel("5/9 - ") && onScreenLabel("56 %")
         && onScreenLabel("SESSION - 1 / 4");
 }
+// The caption names the spot, then its numbers: no separator in between.
+bool resultsCaption(const Model& m)
+{
+    return resultsPage1(m) && (onScreenLabel("3PT - Top 3/5 - 60 %") || onScreenLabel("Top 3/5 - 60 %"));
+}
 bool resultsPage2(const Model& m)
 {
     return onScreen(ScreenId::Results) && m.resultsPage == 1 && onScreenLabel("3/5") && onScreenLabel("Top 3/5");
@@ -96,7 +123,7 @@ bool resultsPage2(const Model& m)
 bool resultsPage3(const Model& m)
 {
     return onScreen(ScreenId::Results) && m.resultsPage == 2 && onScreenLabel("3", Theme::kAccent)
-        && onScreenLabel("STREAK");
+        && onScreenLabel("STREAK") && (onScreenLabel("in a row - Top") || onScreenLabel("at Top"));
 }
 // Trend on 3PT: this session 3/5 = 60 % against session 1's 4/4 = 100 %.
 bool resultsPage4(const Model& m)
@@ -427,11 +454,13 @@ bool sbEdit(const Model& m)
     const score::Workout& d = sModel->draft();
     return onBuilder("EDIT STEP 1") && !m.draftIsNew && d.id == sCustomId && d.stepCount == 2 && fieldActive("Spot");
 }
+// Add step / Save workout lead on every step; Next step follows them.
 bool sbMenuEditStep1(const Model&)
 {
-    return onBuilder("EDIT STEP 1") && menuSelected("Next step") && onScreenLabel("Add step")
-        && onScreenLabel("Save workout");
+    return onBuilder("EDIT STEP 1") && menuSelected("Add step") && onScreenLabel("Save workout")
+        && onScreenLabel("Next step");
 }
+bool sbMenuOnNext(const Model&) { return onBuilder("EDIT STEP 1") && menuSelected("Next step"); }
 bool sbEditStep2(const Model& m) { return onBuilder("EDIT STEP 2") && m.draftStep == 1 && fieldActive("Spot"); }
 bool sbBackToRest(const Model& m) { return onBuilder("EDIT STEP 1") && m.draftStep == 0 && fieldActive("Rest"); }
 // The draft lost a step; the stored workout still has both until Save.
@@ -491,7 +520,7 @@ const Step kSteps[] = {
     {  400, nullptr, nullptr, '4', "Active: miss" },
     {  600, nullptr, nullptr, '1', "Active: undo (toast)" },
     { 2500, nullptr, nullptr, 'w', "Active: DOWN press" },
-    {  600, stillActive, "hold fired, no switch before the release",
+    {  600, holdHint, "hold fired: still on Active, toast Release to change spot",
                              's', "Active: DOWN release after the hold -> SpotPicker (change spot)" },
     {  600, pickerOnCurrentSpot, "picker open in ChangeSpot mode on the current spot",
                              '2', "SpotPicker: DOWN" },
@@ -548,7 +577,7 @@ const Step kSteps[] = {
     {  600, nullptr, nullptr, '2', "Active: DOWN -> pause, Pause" },
     {  800, nullptr, nullptr, '2', "Pause: DOWN -> End & save" },
     {  500, nullptr, nullptr, '3', "Pause: SELECT End & save -> Results" },
-    { 1500, resultsPage1, "Results page 1: total 5/9 - 56 %",
+    { 1500, resultsCaption, "Results page 1: total 5/9 - 56 %, caption 3PT - Top 3/5 - 60 %",
                              '1', "Results 1: UP (previous spot)" },
     {  500, nullptr, nullptr, '2', "Results 1: DOWN (next spot)" },
     {  500, nullptr, nullptr, '3', "Results 1: SELECT -> page 2" },
@@ -556,7 +585,7 @@ const Step kSteps[] = {
                              '2', "Results 2: DOWN (Mid-range)" },
     {  500, nullptr, nullptr, '1', "Results 2: UP (3PT)" },
     {  500, nullptr, nullptr, '3', "Results 2: SELECT -> page 3" },
-    {  500, resultsPage3, "Results page 3: STREAK 3",
+    {  500, resultsPage3, "Results page 3: STREAK 3 in a row - Top",
                              '3', "Results 3: SELECT -> page 4" },
     {  500, resultsPage4, "Results page 4: trend",
                              '1', "Results 4: UP" },
@@ -771,7 +800,10 @@ const Step kSteps[] = {
     {  800, nullptr, nullptr, '3', "StepBuilder Goal: SELECT -> Value" },
     {  300, nullptr, nullptr, '3', "StepBuilder Value: SELECT -> Rest" },
     {  300, nullptr, nullptr, '3', "StepBuilder Rest: SELECT -> mini-menu" },
-    {  300, sbMenuEditStep1, "menu on step 1 of 2 opens on Next step",
+    {  300, sbMenuEditStep1, "menu on step 1 of 2 opens on Add step; Save workout, Next step follow",
+                             '2', "StepBuilder menu: DOWN" },
+    {  300, nullptr, nullptr, '2', "StepBuilder menu: DOWN (Next step)" },
+    {  300, sbMenuOnNext, "menu on Next step",
                              '3', "StepBuilder menu: SELECT Next step" },
     {  300, sbEditStep2, "EDIT STEP 2",
                              '4', "StepBuilder Spot: BACK -> step 1, Rest" },
@@ -817,7 +849,103 @@ const Step kSteps[] = {
     { 1000, onHome, "on Home after the step builder",
                              '4', "Home: BACK -> exit app" },
 };
-constexpr uint32_t kCount = sizeof(kSteps) / sizeof(kSteps[0]);
+
+// --- Crash resume (HOOPS_SELFTEST_PHASE=1, then =2) -------------------------------
+
+/// The simulator's file system root is Software/Output (see workoutsFileSize()).
+bool currentFileExists()
+{
+    FILE* f = fopen("../../../../../Output/current.bin", "rb");
+    if (f) {
+        fclose(f);
+    }
+    LOG_INFO("current.bin: %s\n", f ? "present" : "absent");
+    return f != nullptr;
+}
+
+bool openCounts(const Model& m, uint16_t makes, uint16_t attempts)
+{
+    return m.hasSnapshot() && m.snapshot().mode == score::Snapshot::kModeOpen && m.snapshot().totalMakes == makes
+        && m.snapshot().totalAttempts == attempts && m.snapshot().spotMakes == makes
+        && m.snapshot().spotAttempts == attempts;
+}
+
+// Phase 1: 3 makes in 5 shots, saved to current.bin, then the process dies.
+bool p1BeforeCrash(const Model& m)
+{
+    return onScreen(ScreenId::Active) && openCounts(m, 3, 5) && onScreenLabel("3") && onScreenLabel("/5")
+        && currentFileExists();
+}
+
+void crash()
+{
+    LOG_INFO("phase 1: exiting without END_SESSION (crash)\n");
+    fflush(nullptr);
+    std::_Exit(0);
+}
+
+const Step kPhase1[] = {
+    { 1500, nullptr, nullptr, '3', "Home: SELECT Open Session -> SpotPicker" },
+    {  500, nullptr, nullptr, '3', "SpotPicker: SELECT -> startOpen, Active" },
+    { 1200, nullptr, nullptr, '3', "Active: make" },
+    {  400, nullptr, nullptr, '3', "Active: make" },
+    {  400, nullptr, nullptr, '4', "Active: miss" },
+    {  400, nullptr, nullptr, '3', "Active: make" },
+    {  400, nullptr, nullptr, '4', "Active: miss" },
+    { 1000, p1BeforeCrash, "phase 1: Active 3/5, current.bin written",
+                             0, "phase 1 ready: waiting for kill -9" },
+    // A kill -9 from outside lands in this window; otherwise _Exit().
+    { 3000, nullptr, nullptr, 0, "phase 1: crash", &crash },
+};
+
+// Phase 2: the restart after the crash.
+bool p2Home(const Model& m)
+{
+    LOG_INFO("restored snapshot: state %u flags %x; Resume selected %d, hint %d/%d\n",
+             m.hasSnapshot() ? m.snapshot().state : 255u, m.hasSnapshot() ? m.snapshot().flags : 0u,
+             menuSelected("Resume session"), visibleLabel("Session in progress"),
+             onScreenLabel("Session in progress", Theme::kAmber));
+    return onHome(m) && m.hasSnapshot() && (m.snapshot().flags & score::Snapshot::kResumable)
+        && m.snapshot().state == static_cast<uint8_t>(score::SessionState::Paused) && openCounts(m, 3, 5)
+        && menuSelected("Resume session") && visibleLabel("Session in progress")
+        && onScreenLabel("Session in progress", Theme::kAmber);
+}
+bool p2Pause(const Model& m)
+{
+    return onPause(m) && openCounts(m, 3, 5) && onScreenLabel(" - 3/5 - 60 %", 0, true);
+}
+bool p2Active(const Model& m)
+{
+    return onScreen(ScreenId::Active) && m.snapshot().state == static_cast<uint8_t>(score::SessionState::Active)
+        && openCounts(m, 3, 5) && onScreenLabel("/5");
+}
+bool p2Counted(const Model& m) { return onScreen(ScreenId::Active) && openCounts(m, 4, 6) && onScreenLabel("/6"); }
+bool p2Clean(const Model& m)
+{
+    return onHome(m) && m.hasSnapshot() && !score::isRunning(static_cast<score::SessionState>(m.snapshot().state))
+        && !onScreenLabel("Resume session") && !visibleLabel("Session in progress") && !currentFileExists();
+}
+
+const Step kPhase2[] = {
+    { 1500, p2Home, "phase 2: Home first item Resume session (selected), Session in progress (amber); "
+                    "Paused, kResumable, 3/5",
+                             '3', "Home: SELECT Resume session -> Pause" },
+    { 1000, p2Pause, "phase 2: Pause shows the restored 3/5 - 60 %",
+                             '3', "Pause: SELECT Resume -> Active" },
+    { 1000, p2Active, "phase 2: resumed onto Active, 3/5",
+                             '3', "Active: make" },
+    {  600, p2Counted, "phase 2: the restored session counts on: 4/6",
+                             '2', "Active: DOWN -> pause, Pause" },
+    {  800, nullptr, nullptr, '2', "Pause: DOWN" },
+    {  400, nullptr, nullptr, '2', "Pause: DOWN -> Discard" },
+    {  400, nullptr, nullptr, '3', "Pause: SELECT Discard -> confirm" },
+    {  400, nullptr, nullptr, '3', "Pause: SELECT -> discard, Home" },
+    { 1500, p2Clean, "phase 2: Home without Resume or hint after the discard, current.bin gone",
+                             '4', "Home: BACK -> exit app" },
+};
+
+const Step* sSteps = kSteps;
+uint32_t    sCount = sizeof(kSteps) / sizeof(kSteps[0]);
 
 uint32_t sIndex  = 0;
 uint32_t sPassed = 0;
@@ -849,26 +977,31 @@ void tick(lv_timer_t* t)
 {
     logSnapshot();
     logPool();
-    const Step& step = kSteps[sIndex++];
+    const Step& step = sSteps[sIndex++];
     if (step.check) {
         const bool ok = step.check(*sModel);
         ok ? ++sPassed : ++sFailed;
         LOG_INFO("CHECK %s: %s (screen %u)\n", ok ? "PASS" : "FAIL", step.checkNote,
                  static_cast<unsigned>(ScreenManager::instance().current()));
     }
-    if (sIndex == kCount) {
+    if (sIndex == sCount) {
         // The last step may exit the app: report before sending it.
         LOG_INFO("done: %lu checks passed, %lu failed\n", static_cast<unsigned long>(sPassed),
                  static_cast<unsigned long>(sFailed));
     }
-    LOG_INFO("step %lu key '%c' on screen %u: %s\n", static_cast<unsigned long>(sIndex), step.key,
+    LOG_INFO("step %lu key '%c' on screen %u: %s\n", static_cast<unsigned long>(sIndex), step.key ? step.key : '-',
              static_cast<unsigned>(ScreenManager::instance().current()), step.note);
-    uint32_t key = static_cast<uint32_t>(step.key);
-    lv_obj_send_event(lv_screen_active(), LV_EVENT_KEY, &key);
-    if (sIndex < kCount) {
-        lv_timer_set_period(t, kSteps[sIndex].delayMs);
+    if (step.key != 0) {
+        uint32_t key = static_cast<uint32_t>(step.key);
+        lv_obj_send_event(lv_screen_active(), LV_EVENT_KEY, &key);
+    }
+    if (sIndex < sCount) {
+        lv_timer_set_period(t, sSteps[sIndex].delayMs);
     } else {
         lv_timer_delete(t);
+    }
+    if (step.after) {
+        step.after();
     }
 }
 
@@ -877,7 +1010,18 @@ void tick(lv_timer_t* t)
 void startSelfTest(Model& model)
 {
     sModel = &model;
-    lv_timer_create(&tick, kSteps[0].delayMs, nullptr);
+    // HOOPS_SELFTEST_PHASE: unset = the full walk; 1 = start a session and
+    // crash; 2 = the restart (crash resume).
+    const char* phase = getenv("HOOPS_SELFTEST_PHASE");
+    if (phase && strcmp(phase, "1") == 0) {
+        sSteps = kPhase1;
+        sCount = sizeof(kPhase1) / sizeof(kPhase1[0]);
+    } else if (phase && strcmp(phase, "2") == 0) {
+        sSteps = kPhase2;
+        sCount = sizeof(kPhase2) / sizeof(kPhase2[0]);
+    }
+    LOG_INFO("self-test: %s, %lu steps\n", phase ? phase : "full", static_cast<unsigned long>(sCount));
+    lv_timer_create(&tick, sSteps[0].delayMs, nullptr);
 }
 
 #endif // HOOPS_SELFTEST

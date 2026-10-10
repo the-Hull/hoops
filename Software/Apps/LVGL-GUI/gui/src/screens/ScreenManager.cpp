@@ -68,6 +68,13 @@ void ScreenManager::switchNow(ScreenId id)
         return;
     }
 
+    // resumeEntry is meant for the Active / Rest screen Pause routes to; a
+    // switch anywhere else (e.g. a snapshot sends Pause home) must not leave
+    // it set for a later, unrelated entry.
+    if (id != ScreenId::Active && id != ScreenId::Rest) {
+        mModel->resumeEntry = false;
+    }
+
     Screen* old = mCurrent;
     if (old) {
         old->onHide();

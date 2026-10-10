@@ -13,9 +13,9 @@
 
 /// Flash files of the app, framed by score::ser. The only place that touches the file system.
 /// Paths are relative to the app directory:
-///   workouts.bin          user workouts (WorkoutStore)
+///   workouts.bin          user workouts (WorkoutStore); written via workouts.bin.tmp + rename
 ///   current.bin           the running session, for crash resume
-///   sessions/index.bin    session summaries (SessionIndex)
+///   sessions/index.bin    session summaries (SessionIndex); written via index.bin.tmp + rename
 ///   sessions/<id>.bin     one finished session each
 /// Every failure is logged at WARNING and returned as false; nothing asserts.
 class Storage
@@ -38,10 +38,15 @@ public:
     void removeSession(uint32_t id);                      ///< no-op when absent
 
 private:
-    bool write(const char* path, uint32_t magic, const void* obj, size_t size);
+    /// @p atomic: write <path>.tmp, then rename it over <path> (workouts, index).
+    bool write(const char* path, uint32_t magic, const void* obj, size_t size, bool atomic = false);
+    bool writeFile(const char* path, size_t n);   ///< the first n bytes of mBuf
     bool read(const char* path, uint32_t magic, void* obj, size_t size);
+    /// read(), falling back to <path>.tmp when <path> is absent (a crash mid-replace).
+    bool readAtomic(const char* path, uint32_t magic, void* obj, size_t size);
     void remove(const char* path);
     static void sessionPath(uint32_t id, char* out, size_t cap);
+    static void tmpPath(const char* path, char* out, size_t cap);
 
     /// Largest persisted payload; SessionIndex (1804 B) outgrows Session (1632 B).
     static constexpr size_t kMaxPayload =

@@ -23,22 +23,22 @@ Storage::Storage(const SDK::Kernel& kernel)
 
 bool Storage::loadWorkouts(score::WorkoutStore& out)
 {
-    return read(kWorkoutsPath, score::ser::kMagicWorkouts, &out, sizeof(out));
+    return readAtomic(kWorkoutsPath, score::ser::kMagicWorkouts, &out, sizeof(out));
 }
 
 bool Storage::saveWorkouts(const score::WorkoutStore& in)
 {
-    return write(kWorkoutsPath, score::ser::kMagicWorkouts, &in, sizeof(in));
+    return write(kWorkoutsPath, score::ser::kMagicWorkouts, &in, sizeof(in), true);
 }
 
 bool Storage::loadIndex(score::SessionIndex& out)
 {
-    return read(kIndexPath, score::ser::kMagicIndex, &out, sizeof(out));
+    return readAtomic(kIndexPath, score::ser::kMagicIndex, &out, sizeof(out));
 }
 
 bool Storage::saveIndex(const score::SessionIndex& in)
 {
-    return write(kIndexPath, score::ser::kMagicIndex, &in, sizeof(in));
+    return write(kIndexPath, score::ser::kMagicIndex, &in, sizeof(in), true);
 }
 
 bool Storage::saveCurrent(const score::Session& s)
@@ -89,7 +89,7 @@ void Storage::sessionPath(uint32_t id, char* out, size_t cap)
     snprintf(out, cap, "sessions/%lu.bin", static_cast<unsigned long>(id));
 }
 
-bool Storage::write(const char* path, uint32_t magic, const void* obj, size_t size)
+bool Storage::write(const char* path, uint32_t magic, const void* obj, size_t size, bool atomic)
 {
     const size_t n = score::ser::encode(magic, obj, size, mBuf, sizeof(mBuf));
     if (n == 0) {
@@ -108,6 +108,28 @@ bool Storage::write(const char* path, uint32_t magic, const void* obj, size_t si
         }
     }
 
+    if (!atomic) return writeFile(path, n);
+
+    // Atomic: the whole file goes to <path>.tmp, which then replaces <path>.
+    // A crash leaves either the old file or a complete .tmp (see readAtomic).
+    char tmp[SDK::Interface::IFileSystem::skMaxPathLen];
+    tmpPath(path, tmp, sizeof(tmp));
+    remove(tmp);   // stale, from an interrupted write
+    if (!writeFile(tmp, n)) return false;
+    if (!mKernel.fs.rename(tmp, path)) {
+        // POSIX rename (the simulator) replaces the target; FatFS-style
+        // file systems refuse an existing one: drop it and retry.
+        remove(path);
+        if (!mKernel.fs.rename(tmp, path)) {
+            LOG_WARNING("%s: rename to %s failed\n", tmp, path);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Storage::writeFile(const char* path, size_t n)
+{
     std::unique_ptr<SDK::Interface::IFile> file = mKernel.fs.file(path);
     if (!file) {
         LOG_WARNING("%s: no file handle\n", path);
@@ -126,6 +148,23 @@ bool Storage::write(const char* path, uint32_t magic, const void* obj, size_t si
         return false;
     }
     return true;
+}
+
+bool Storage::readAtomic(const char* path, uint32_t magic, void* obj, size_t size)
+{
+    if (mKernel.fs.exist(path)) return read(path, magic, obj, size);
+    // A crash between remove(path) and rename() leaves only the complete
+    // .tmp; decode() rejects a torn one.
+    char tmp[SDK::Interface::IFileSystem::skMaxPathLen];
+    tmpPath(path, tmp, sizeof(tmp));
+    if (!mKernel.fs.exist(tmp)) return false;
+    LOG_WARNING("%s: absent, recovering from %s\n", path, tmp);
+    return read(tmp, magic, obj, size);
+}
+
+void Storage::tmpPath(const char* path, char* out, size_t cap)
+{
+    snprintf(out, cap, "%s.tmp", path);
 }
 
 bool Storage::read(const char* path, uint32_t magic, void* obj, size_t size)

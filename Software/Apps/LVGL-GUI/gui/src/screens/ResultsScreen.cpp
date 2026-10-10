@@ -254,7 +254,7 @@ void ResultsScreen::buildCourt()
     }
     mCourt->setSelected(mSpot);
 
-    // Caption "3PT · Top · 5/10 · 50 %"; long spot names drop the category.
+    // Caption "3PT · Top 5/10 · 50 %"; long spot names drop the category.
     constexpr Font kCaptionFonts[] = { Font::Medium18, Font::Regular16, Font::Regular14 };
     if (mSpot == Court::kNone) {
         const char* none[] = { "No shots" };
@@ -265,7 +265,7 @@ void ResultsScreen::buildCourt()
         char nums[48];
         fmtMa(ma, sizeof(ma), s);
         fmtPct(pct, sizeof(pct), s);
-        snprintf(nums, sizeof(nums), "%s%s%s%s", kDot, ma, kDot, pct);
+        snprintf(nums, sizeof(nums), " %s%s%s", ma, kDot, pct);
         const char* name = score::spotInfo(mSpot).name;
         char full[64];
         char brief[64];
@@ -375,20 +375,30 @@ void ResultsScreen::buildHighlights()
     const score::SessionStats& st = mModel.results().stats;
     char value[16];
 
-    // STREAK: longest run of makes, and the category it ended in.
+    // STREAK: longest run of makes, and the spot it was made at (its
+    // category when the spot does not fit).
     snprintf(value, sizeof(value), "%u", static_cast<unsigned>(st.longestStreak));
     char inRow[32];
     char at[24];
+    char inRowCat[32];
+    char atCat[24];
     if (st.streakSpot < score::kSpotCount) {
-        const char* cat = score::categoryShort(score::spotInfo(st.streakSpot).category);
-        snprintf(inRow, sizeof(inRow), "in a row%s%s", kDot, cat);
-        snprintf(at, sizeof(at), "at %s", cat);
+        const score::SpotInfo& info = score::spotInfo(st.streakSpot);
+        const char* shortName = spotShort(info.name);
+        const char* spot = strlen(shortName) > 1 ? shortName : info.name;   // "Layup · L", not "L"
+        const char* cat  = score::categoryShort(info.category);
+        snprintf(inRow, sizeof(inRow), "in a row%s%s", kDot, spot);
+        snprintf(at, sizeof(at), "at %s", spot);
+        snprintf(inRowCat, sizeof(inRowCat), "in a row%s%s", kDot, cat);
+        snprintf(atCat, sizeof(atCat), "at %s", cat);
     } else {
         snprintf(inRow, sizeof(inRow), "--");
         snprintf(at, sizeof(at), "--");
+        snprintf(inRowCat, sizeof(inRowCat), "--");
+        snprintf(atCat, sizeof(atCat), "--");
     }
-    const char* streakSubs[] = { inRow, at };
-    card(mPageObj, 0, 0, "STREAK", value, Theme::kAccent, streakSubs, 2);
+    const char* streakSubs[] = { inRow, at, inRowCat, atCat };
+    card(mPageObj, 0, 0, "STREAK", value, Theme::kAccent, streakSubs, 4);
 
     spotCard(mPageObj, 1, 0, "BEST SPOT", st.bestSpot, st, Theme::kGood);
     spotCard(mPageObj, 0, 1, "WORK ON", st.worstSpot, st, Theme::kBad);
@@ -605,6 +615,12 @@ void ResultsScreen::onKey(uint8_t code)
 
 void ResultsScreen::onResults()
 {
+    if (mModel.resultsFrom == Model::ResultsFrom::History && mModel.hasResults()
+        && mModel.results().sessionId != mModel.resultsSessionId) {
+        // A reply to an earlier selection: drop it and keep waiting for ours.
+        mModel.clearResults();
+        return;
+    }
     mWaiting = false;
     mSpot    = mModel.hasResults() ? spotWithAttempts(score::kSpotCount - 1, 1) : Court::kNone;
     rebuild();

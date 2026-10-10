@@ -5,6 +5,9 @@
  *
  * Only built with HOOPS_SELFTEST defined (e.g. -DCMAKE_CXX_FLAGS=
  * -DHOOPS_SELFTEST=1); otherwise SelfTest.cpp compiles to nothing.
+ * HOOPS_SELFTEST_PHASE picks the script: unset = the full walk; 1 = start an
+ * open session, 5 shots (3 makes), then exit without ending it (a crash);
+ * 2 = the restart: Resume session on Home, Pause with the counts intact.
  ******************************************************************************
  */
 

@@ -7,6 +7,8 @@
 
 #include "gui/widgets/ListMenu.hpp"
 
+#include <initializer_list>
+
 namespace
 {
 
@@ -174,10 +176,22 @@ void ListMenu::refresh()
     }
 
     const Item& sel = mItems[mSelected];
+    // A text too wide for the pill in selFont ("Resume session" on Home)
+    // steps down a face before the label's dots would cut it.
+    const int32_t textW = mGeom.pillW - 2 * kPillPad;
+    Theme::Font f = mGeom.selFont;
+    for (const Theme::Font cand : { mGeom.selFont, Theme::Font::Medium18, mGeom.itemFont }) {
+        f = cand;
+        if (Theme::textWidth(cand, sel.line1) <= textW) {
+            break;
+        }
+    }
+    lv_obj_set_style_text_font(mSel1, Theme::font(f), LV_PART_MAIN);
+    lv_obj_set_height(mSel1, lv_font_get_line_height(Theme::font(f)));
     Theme::setText(mSel1, sel.line1);
     const bool two = sel.line2 != nullptr && sel.line2[0] != '\0';
     const int32_t y1 = two ? mGeom.pillY - mGeom.pillH / 5 - 1 : mGeom.pillY;
-    lv_obj_set_y(mSel1, Theme::topFor(mGeom.selFont, y1));
+    lv_obj_set_y(mSel1, Theme::topFor(f, y1));
     if (two) {
         Theme::setText(mSel2, sel.line2);
         Theme::setHidden(mSel2, false);

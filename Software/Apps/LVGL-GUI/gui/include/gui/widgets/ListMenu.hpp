@@ -7,7 +7,8 @@
  * No animation. Rows show the neighbours of the selected item (wrapping when
  * circular, the default); an item is never shown twice. The items array is
  * not copied: it must outlive the menu or the next setItems(). Texts pass
- * through Theme::setText(), so spot names with " · " render.
+ * through Theme::setText(), so spot names with " · " render. A selected text
+ * too wide for the pill steps down to Medium18, then the row font.
  *
  * Geometry y values are vertical centres in screen px (as the mockup's); a
  * negative prevY means no row above. `below` rows start at nextY, rowGap
