@@ -6,6 +6,7 @@
 #pragma once
 
 #include "score/Session.hpp"
+#include "score/Stats.hpp"
 #include "score/Workout.hpp"
 
 #include <cstddef>
@@ -38,13 +39,20 @@ struct SessionIndex {
     uint8_t        count;
     uint8_t        pad[3];
     SessionSummary items[kIndexCapacity];   ///< oldest first
+    SpotStat       last[kSpotCount];        ///< the newest session's makes/attempts at that spot (attempts > 0)
+    SpotStat       best[kSpotCount];        ///< best session % at that spot with ≥ kMinAttemptsForRank attempts
+                                            ///< there (ties keep the older); all-time, eviction keeps them
 
     uint32_t push(const SessionSummary& s);            ///< returns evicted id or 0; same id replaces its row
     const SessionSummary* find(uint32_t id) const;
     const SessionSummary* newest(uint8_t back) const;  ///< back 0 = newest, nullptr past the start
     bool remove(uint32_t id);
     bool valid() const;   ///< count in range (check after load)
+    /// Updates last/best from one session's per-spot totals (SessionStats::compute(s).spot); call after push().
+    void recordSpots(const SpotStat (&spot)[kSpotCount]);
+    void clear();         ///< count 0, rows and records zeroed
 };
+static_assert(sizeof(SessionIndex) == 4 + 36 * kIndexCapacity + 4 * kSpotCount * 2, "SessionIndex flash layout changed");
 static_assert(std::is_trivially_copyable<SessionIndex>::value, "SessionIndex is memcpy'd to flash");
 static_assert(std::has_unique_object_representations<SessionIndex>::value, "SessionIndex: no padding");
 

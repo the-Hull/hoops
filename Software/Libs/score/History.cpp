@@ -62,6 +62,21 @@ const SessionSummary* SessionIndex::newest(uint8_t back) const
 
 bool SessionIndex::valid() const { return count <= kIndexCapacity; }
 
+void SessionIndex::recordSpots(const SpotStat (&spot)[kSpotCount])
+{
+    for (uint8_t s = 0; s < kSpotCount; ++s) {
+        const SpotStat& in = spot[s];
+        if (in.attempts == 0) continue;
+        last[s] = in;
+        if (in.attempts < kMinAttemptsForRank) continue;
+        if (best[s].attempts < kMinAttemptsForRank ||
+            pct(in.makes, in.attempts) > pct(best[s].makes, best[s].attempts))
+            best[s] = in;   // a tie keeps the older record
+    }
+}
+
+void SessionIndex::clear() { std::memset(this, 0, sizeof *this); }
+
 bool SessionIndex::remove(uint32_t id)
 {
     for (uint8_t i = 0; i < count; ++i) {

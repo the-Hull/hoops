@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstring>
 #include "score/History.hpp"
+#include "score/Serializer.hpp"
 using namespace score;
 
 namespace {
@@ -118,6 +119,85 @@ TEST(History, FindAndRemoveCompacts) {
     EXPECT_EQ(ix.count, 4);
     EXPECT_TRUE(ix.remove(14));
     EXPECT_EQ(ix.newest(0)->id, 13u);
+}
+namespace {
+struct Spots13 { SpotStat a[kSpotCount]; };
+Spots13 one(Spot s, uint16_t makes, uint16_t attempts) {
+    Spots13 r{};
+    r.a[idx(s)] = { makes, attempts };
+    return r;
+}
+} // namespace
+
+TEST(History, RecordSpotsSetsLastAndBest) {
+    SessionIndex ix{};
+    ix.recordSpots(one(Spot::Ft, 4, 5).a);
+    EXPECT_EQ(ix.last[idx(Spot::Ft)].makes, 4);
+    EXPECT_EQ(ix.last[idx(Spot::Ft)].attempts, 5);
+    EXPECT_EQ(ix.best[idx(Spot::Ft)].makes, 4);
+    EXPECT_EQ(ix.best[idx(Spot::Ft)].attempts, 5);
+}
+TEST(History, LastAlwaysReplaced) {
+    SessionIndex ix{};
+    ix.recordSpots(one(Spot::Top3, 8, 10).a);
+    ix.recordSpots(one(Spot::Top3, 1, 10).a);   // worse
+    EXPECT_EQ(ix.last[idx(Spot::Top3)].makes, 1);
+    EXPECT_EQ(ix.last[idx(Spot::Top3)].attempts, 10);
+    EXPECT_EQ(ix.best[idx(Spot::Top3)].makes, 8);
+    EXPECT_EQ(ix.best[idx(Spot::Top3)].attempts, 10);
+    ix.recordSpots(one(Spot::Top3, 9, 10).a);   // better
+    EXPECT_EQ(ix.best[idx(Spot::Top3)].makes, 9);
+}
+TEST(History, BestNeedsRankThreshold) {
+    SessionIndex ix{};
+    ix.recordSpots(one(Spot::LayupL, 3, 4).a);   // 4 < kMinAttemptsForRank
+    EXPECT_EQ(ix.last[idx(Spot::LayupL)].attempts, 4);
+    EXPECT_EQ(ix.best[idx(Spot::LayupL)].makes, 0);
+    EXPECT_EQ(ix.best[idx(Spot::LayupL)].attempts, 0);
+    ix.recordSpots(one(Spot::LayupL, 3, 5).a);
+    EXPECT_EQ(ix.best[idx(Spot::LayupL)].makes, 3);
+    EXPECT_EQ(ix.best[idx(Spot::LayupL)].attempts, 5);
+}
+TEST(History, BestTieKeepsOlder) {
+    SessionIndex ix{};
+    ix.recordSpots(one(Spot::Ft, 5, 10).a);    // 50 %
+    ix.recordSpots(one(Spot::Ft, 10, 20).a);   // 50 % again
+    EXPECT_EQ(ix.best[idx(Spot::Ft)].makes, 5);
+    EXPECT_EQ(ix.best[idx(Spot::Ft)].attempts, 10);
+    EXPECT_EQ(ix.last[idx(Spot::Ft)].attempts, 20);
+}
+TEST(History, BestUpgradesFromUnranked) {
+    SessionIndex ix{};
+    ix.best[idx(Spot::Ft)] = { 2, 3 };         // unranked (67 %), e.g. from an older rule
+    ix.recordSpots(one(Spot::Ft, 3, 5).a);     // 60 %, but ranked
+    EXPECT_EQ(ix.best[idx(Spot::Ft)].makes, 3);
+    EXPECT_EQ(ix.best[idx(Spot::Ft)].attempts, 5);
+}
+TEST(History, SpotsWithoutAttemptsUntouched) {
+    SessionIndex ix{};
+    ix.recordSpots(one(Spot::LWing3, 6, 10).a);
+    ix.recordSpots(one(Spot::RWing3, 2, 5).a);   // LWing3 has 0 attempts here
+    EXPECT_EQ(ix.last[idx(Spot::LWing3)].makes, 6);
+    EXPECT_EQ(ix.last[idx(Spot::LWing3)].attempts, 10);
+    EXPECT_EQ(ix.best[idx(Spot::LWing3)].makes, 6);
+    for (uint8_t s = 0; s < kSpotCount; ++s) {
+        if (s == idx(Spot::LWing3) || s == idx(Spot::RWing3)) continue;
+        EXPECT_EQ(ix.last[s].attempts, 0) << int(s);
+        EXPECT_EQ(ix.best[s].attempts, 0) << int(s);
+    }
+}
+TEST(History, ClearZeroesEverything) {
+    SessionIndex ix{};
+    for (uint32_t id = 1; id <= 3; ++id) ix.push(sum(id));
+    ix.recordSpots(one(Spot::Ft, 7, 10).a);
+    ix.clear();
+    const SessionIndex zero{};
+    EXPECT_EQ(ix.count, 0);
+    EXPECT_EQ(std::memcmp(&ix, &zero, sizeof ix), 0);
+}
+TEST(History, IndexSizeAndMagic) {
+    EXPECT_EQ(sizeof(SessionIndex), 4u + 36u * 50u + 4u * 13u * 2u);
+    EXPECT_EQ(ser::kMagicIndex, 0x32584948u);
 }
 TEST(History, IndexValid) {
     SessionIndex ix{};
