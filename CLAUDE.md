@@ -41,15 +41,23 @@ Two processes, as every UNA app:
   255), `Snapshot` incl. `streak`), `Stats`, `History` (`SessionIndex`, 50 rows, trend of 5, per-spot
   `last[13]`/`best[13]` records via `recordSpots()`), `Settings` (defaults, `valid()`), `Serializer`.
 - **IPC** (`Software/Libs/Header/Commands.hpp`): padding-free POD messages. `0x01xx` GUI → Service
-  (START_OPEN 0x0101 … GET_HISTORY 0x0110, SET_SETTINGS 0x0111, GET_SPOT_STATS 0x0112, CLEAR_HISTORY 0x0113),
-  `0x02xx` Service → GUI (SNAPSHOT, UNDO_RESULT, STEP_DONE, WORKOUT_ITEM, RESULTS, HISTORY, LOCAL_TIME, SAVED,
-  WORKOUT_SAVED 0x0209, SETTINGS 0x020A, SPOT_STATS 0x020B). A RESULTS reply with `sessionId 0` means "none";
-  `GET_RESULTS{0}` = the session just ended. HISTORY is paged `{total, offset, count, pad, items[5]}`: one
-  GET_HISTORY streams every indexed row newest first, ⌈total/5⌉ messages (one `{0,0,0}` page when empty; a
-  missing message block stops the stream and the GUI keeps what it has). SETTINGS (`score::Settings`) goes out
-  on GUI start before LOCAL_TIME and the first snapshot, and after every SET_SETTINGS (an invalid one is
-  ignored and answered with the settings in force). SPOT_STATS = `SpotStat last[13], best[13]`. CLEAR_HISTORY
-  writes the empty index first, then removes the indexed `.bin`/`.csv` files, then sends HISTORY + SPOT_STATS.
+  (START_OPEN 0x0101 … GET_HISTORY 0x0110, SET_SETTINGS 0x0111, GET_SPOT_STATS 0x0112, CLEAR_HISTORY 0x0113,
+  GET_SETTINGS 0x0114), `0x02xx` Service → GUI (SNAPSHOT, UNDO_RESULT, STEP_DONE, WORKOUT_ITEM, RESULTS,
+  HISTORY, LOCAL_TIME, SAVED, WORKOUT_SAVED 0x0209, SETTINGS 0x020A, SPOT_STATS 0x020B). A RESULTS reply with
+  `sessionId 0` means "none"; `GET_RESULTS{0}` = the session just ended. History is **pull-based**:
+  `GET_HISTORY{offset, seq, pad[2]}` → exactly one HISTORY page `{total, offset, count, seq, items[5]}` (rows
+  offset.. newest first, `seq` echoed; count 0 past the end, `{0,0,0}` for an empty index).
+  `Model::requestHistory(all)` starts a stream (`++seq`, offset 0) and drops pages with another seq or offset;
+  with `all` it asks for the next page from each one that arrives (one HISTORY in flight). Home, Settings and
+  Results-after-a-session ask for the first page only (it carries `total`); History and Results-from-History
+  pull all of it. History asks for the user workouts first and starts its stream from `onWorkouts()`.
+  SETTINGS (`score::Settings`) goes out on GUI start before LOCAL_TIME and the first snapshot, after every
+  SET_SETTINGS (an invalid one is ignored and answered with the settings in force) and, with LOCAL_TIME, in
+  answer to GET_SETTINGS (the Model sends it on resume while it has no SETTINGS; Settings rows read "Loading…"
+  and SELECT does nothing until then). SPOT_STATS = `SpotStat last[13], best[13]`. CLEAR_HISTORY writes the
+  empty index first, then removes the indexed `.bin`/`.csv` files, then sends SPOT_STATS; the Model follows it
+  with a GET_HISTORY (the empty page). SAVE_WORKOUT is answered by WORKOUT_SAVED alone; the Model then sends
+  GET_WORKOUTS (at most one list in flight: a repeat within 1 s is skipped).
 - **Storage** (app directory; simulator: `Software/Output/`). Every `.bin` file = 12-byte header {magic, size,
   FNV-1a checksum} + the raw POD:
   - `workouts.bin` ('HWK1', `WorkoutStore`), `settings.bin` ('HST1', `score::Settings`, 12 B; missing or
@@ -59,7 +67,8 @@ Two processes, as every UNA app:
     on load.
   - `current.bin` ('HSS1', `Session`): the running session, for crash resume (restored → Paused, `kResumable`);
     written atomically like the others. End & save: session file → index row + spot records (in memory) → CSV
-    → evicted files → index → remove current.bin, so a crash at any point loses nothing (a current.bin whose id is already indexed is
+    → index → evicted files (only after the index is written) → remove current.bin, so a crash at any point
+    loses nothing and no index on flash lists a removed file (a current.bin whose id is already indexed is
     dropped on start). A restored workout session whose step no longer fits the (edited) workout continues
     as an open session.
   - `sessions/<id>.bin` ('HSS1'): one per saved session; evicted with its index row (oldest beyond 50).
@@ -95,7 +104,7 @@ All paths from the repo root.
 ```bash
 # Host unit tests (engine only; fetches googletest on first configure)
 cmake -S Tests/Host -B build-host -DCMAKE_BUILD_TYPE=Debug
-cmake --build build-host && ctest --test-dir build-host --output-on-failure      # 89 tests
+cmake --build build-host && ctest --test-dir build-host --output-on-failure      # 90 tests
 
 # Simulator (needs libsdl2-dev; run from build/bin — the mock file system is ../../../../../Output = Software/Output)
 cd Software/Apps/LVGL-GUI/simulator
@@ -129,6 +138,13 @@ SHOTS=$(realpath ../../../..)/shots && mkdir -p $SHOTS     # shots/ is git-ignor
 # session nor a workout can start while it is in progress (toasts), then Resume -> Pause 3/5 (9 checks).
 (cd build/bin && HOOPS_SELFTEST_PHASE=1 SDL_VIDEODRIVER=dummy timeout 60 ./HoopsSimulator >/dev/null;
                  HOOPS_SELFTEST_PHASE=2 SDL_VIDEODRIVER=dummy timeout 60 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
+# Full store (phase 3): Tests/Host's hoops-seed-index (built with the host tests) writes 50 indexed sessions
+# with their files and 10 user workouts (add --light for a settings.bin with the Light scheme: the start-up
+# rebuild). Checks Home's first page + footer, settings and date, History "Loading…" then all 50 rows, the
+# oldest row's Results, Settings "50 sessions" (8 checks). It replaces the store's sessions: back it up first.
+rm -rf ../../../Output/sessions ../../../Output/workouts.bin ../../../Output/current.bin ../../../Output/settings.bin
+../../../../build-host/hoops-seed-index ../../../Output            # or: … ../../../Output --light
+(cd build/bin && HOOPS_SELFTEST_PHASE=3 SDL_VIDEODRIVER=dummy timeout 60 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
 rm -rf build-selftest build/bin/HoopsSimulator && cmake --build build     # back to the normal binary
 ```
 
@@ -179,6 +195,12 @@ and `--check`, zips) → upload `dist/Hoops-<ver>.zip` → Version → Upload Ne
 - Feedback: `SDK::Message::RequestVibroPlay` (≤ 4 effects per series here), `RequestBacklightSet`
   {brightness, autoOffTimeoutMs}. Mock FS `rename` is POSIX (overwrites); the watch FS may not — Storage
   removes the target and retries.
+- **Service → GUI messages: the GUI queues at most 10 app messages between frames, oldest evicted when full**
+  (`GuiCommandProcessor`, `FixedQueue<MessageBase*, 10>`, `$UNA_SDK/Libs/Source/Port/GuiCommandProcessor.cpp`;
+  log "Queue for custom messages is full"). The queue is drained once per 100 ms frame, before the keys. Never
+  burst: a reply plus whatever else can land in the same frame (the 1 Hz SNAPSHOT while a session runs, other
+  requests sent in that frame) must stay ≤ 10. Today: GUI_RUN = SETTINGS + LOCAL_TIME + SNAPSHOT; GET_WORKOUTS =
+  ≤ 10 WORKOUT_ITEMs (the largest reply); everything else is one or two messages; history is pulled page by page.
 - Docs: https://www.developers.unawatch.com/sdk-v1.5.0/ (index: genindex.html). Pick pages by title.
 
 ## Decided UX (mockups are the source of truth where the spec differs)
@@ -231,6 +253,8 @@ and `--check`, zips) → upload `dist/Hoops-<ver>.zip` → Version → Upload Ne
   hidden for a spot never shot.
 - Settings (Home's Settings row → `ScreenId::Settings`; header "SETTINGS"; two-line list, the selected row shows
   its value; UP/DOWN move, **SELECT = next value** (cycles, wraps; sent at once as SET_SETTINGS), BACK = Home).
+  Until the service's SETTINGS is in (GET_SETTINGS on show) the setting rows read "Loading…" and SELECT does
+  nothing, so defaults never overwrite `settings.bin`.
   Rows: Goal type (Attempts · Makes · Time) · Goal value (5–50 "10 shots" / "10 makes", Time 30–180 "60 s"; a
   type change snaps the value) · Rest (0 / 15 / 30 / 60 s) · Open target (Off · 25 / 50 / 100 / 200 shots) ·
   Hold DOWN (Change spot · Pause) · Haptics (Off · Light · Strong) · Backlight on shot (On · Off) · Heart rate
@@ -291,14 +315,21 @@ history, streak haptics + toast, date refresh, idle timeout on every menu screen
 listing, manifest and packaging script. Verified (2026-10-11): 89 host tests; self-test 117/117 and
 crash-resume 9/9 headless; LVGL pool peak 23 752 B; GUI data+bss 161 980 B, service 20 032 B;
 `Hoops_0.0.0-dev.uapp` 307 872 B; `tools/package_store.sh --allow-placeholder` packs `dist/Hoops-0.0.0-dev.zip`.
+Final review fixes (2026-10-11): pull-based history paging (`GET_HISTORY{offset, seq}`, one page per request),
+GET_SETTINGS + Settings "Loading…" guard, first-page-only requests from Home/Settings, WORKOUT_SAVED sent alone,
+evicted session files removed after the index write; 90 host tests, self-test 117/117, crash-resume 9/9,
+full-store phase 3 8/8 (Dark and Light); GUI data+bss 162 012 B, service 20 032 B.
 
 Known limitations / next:
 - A Light-scheme user sees one dark frame at GUI start (the GUI starts Dark until SETTINGS arrives, ~100 ms).
 - An MVP 'HIX1' index is not migrated: it fails to decode, the service starts with an empty history and the
   old `sessions/<id>.bin` files stay on disk unindexed (Clear history removes indexed files only).
 - CSVs are export-only: nothing reads them back; turning CSV export on does not create CSVs for older sessions.
-- One GET_HISTORY streams up to 10 HISTORY messages (50 rows / 5) back to back; fine in the simulator, untested
-  against the watch's message pool (a missing block stops the stream; the GUI shows the rows it got).
+- A history page lost on the way (none expected now: one is in flight at a time) stalls that stream until the
+  screen asks again (re-entering History). A full History takes 1 + 10 round trips (~1.1 s at 100 ms frames).
+- GET_WORKOUTS' 10 items plus a 1 Hz SNAPSHOT landing in the same frame (10 user workouts and a session
+  running) is 11 messages: item 0 would be evicted and the list held keeps a stale first workout. Not seen;
+  make the list pull-based too if it shows up.
 - `appVersion` in the store manifest is the `.uapp` version verbatim, git suffix included (`0.0.0-dev`,
   `X.Y.Z-<n>-<hash>`): package from a commit tagged `apps-vX.Y.Z`.
 - The streak is capped at 255 (`uint8_t`), so the streak-10 haptic and toast stop after 250 in a row.
@@ -315,7 +346,8 @@ Known limitations / next:
 
 Next:
 1. Hardware pass on the watch: button feel and CLICK/RELEASE timing, haptic levels, backlight timeout, HR,
-   flash write times (atomic rename path, CSV), HISTORY streaming against the message pool, Light scheme on the
+   flash write times (atomic rename path, CSV), "Queue for custom messages is full" in the GUI log and
+   `make_msg` failures in the service log (should be none), Light scheme on the
    MIP display.
 2. Originality feature (e.g. Pressure FT / ghost pace against a previous session).
 3. Real App ID from apps.unawatch.com (`13F039C6FE024E86` is a local placeholder) in **both**
