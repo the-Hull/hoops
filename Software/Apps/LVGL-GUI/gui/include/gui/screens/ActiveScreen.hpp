@@ -50,6 +50,7 @@ public:
     void onStepDone(const CustomMessage::StepDone& d) override;
     void onUndoResult(bool ok, bool made) override;
     void onSuspend() override;
+    void onIdleTimeout() override {}   // shooting: a session is on, never exit on idle
 
     static constexpr uint32_t kToastMs     = 2000;   ///< undo
     static constexpr uint32_t kStepToastMs = 1500;   ///< step done, no rest

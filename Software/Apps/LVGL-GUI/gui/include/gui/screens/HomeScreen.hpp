@@ -36,7 +36,6 @@ public:
 
     void onSnapshot(const score::Snapshot& s) override;
     void onHistory() override;
-    void onIdleTimeout() override;
     void onSuspend() override;
 
 protected:

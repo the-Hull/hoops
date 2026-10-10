@@ -200,13 +200,6 @@ void HomeScreen::onHistory()
     updateFooter();
 }
 
-void HomeScreen::onIdleTimeout()
-{
-    if (!sessionInProgress()) {
-        mModel.exitApp();
-    }
-}
-
 void HomeScreen::onSuspend()
 {
     mKeys.cancel();

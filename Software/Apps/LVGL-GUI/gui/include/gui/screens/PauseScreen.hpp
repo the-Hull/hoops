@@ -43,6 +43,7 @@ public:
     void onSnapshot(const score::Snapshot& s) override;
     void onSaved(uint32_t id) override;
     void onSuspend() override;
+    void onIdleTimeout() override {}   // the way out of a session: never exit on idle
 
     static constexpr uint32_t kConfirmMs = 3000;
     static constexpr uint32_t kEndMs     = 3000;   ///< End & save reply watchdog

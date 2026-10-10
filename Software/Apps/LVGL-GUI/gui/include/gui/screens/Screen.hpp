@@ -49,6 +49,11 @@ public:
     /// Called with an SDK::GUI::Button code (click, press or release).
     virtual void onKey(uint8_t code) { (void)code; }
 
+    /// 60 s without a button: exit the app unless a session is in progress.
+    /// Screens of a session in progress (and the step builder, which holds an
+    /// unsaved draft) override this with a no-op.
+    void onIdleTimeout() override;
+
 protected:
     /// Populate mRoot with widgets. mRoot exists and is styled as the background.
     virtual void build() = 0;

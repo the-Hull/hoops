@@ -33,6 +33,8 @@ public:
     virtual void onResults() {}                           ///< a RESULTS reply arrived
     virtual void onHistory() {}
     virtual void onSaved(uint32_t id) { (void)id; }       ///< session saved under id
+    virtual void onSettings() {}                          ///< a SETTINGS message arrived
+    virtual void onSpotStats() {}                         ///< a SPOT_STATS reply arrived
     virtual void onIdleTimeout() {}
     virtual void onSuspend() {}
     virtual void onResume() {}

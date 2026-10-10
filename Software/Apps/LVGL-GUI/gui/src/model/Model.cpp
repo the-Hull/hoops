@@ -7,6 +7,8 @@
 
 #include "gui/model/Model.hpp"
 #include "gui/model/ModelListener.hpp"
+#include "gui/screens/ScreenManager.hpp"
+#include "gui/theme/Theme.hpp"
 
 #include <cstring>
 
@@ -95,6 +97,28 @@ void Model::exitApp()
     SDK::LVGL::Port::GetInstance().setAppLifeCycleCallback(nullptr);
     SDK::LVGL::Port::GetInstance().setCustomMessageHandler(nullptr);
     mKernel.sys.exit();
+}
+
+void Model::setSettings(const score::Settings& s)
+{
+    mSettings = s;
+    applyScheme();
+    SDK::send_msg<CustomMessage::SetSettings>(mKernel, s);
+}
+
+void Model::applyScheme()
+{
+    const Theme::Scheme s = static_cast<score::Scheme>(mSettings.scheme) == score::Scheme::Light
+                              ? Theme::Scheme::Light : Theme::Scheme::Dark;
+    if (Theme::scheme() == s) {
+        return;
+    }
+    Theme::setScheme(s);
+    // With no screen bound (before the first one, or mid-switch) the next
+    // screen is built in the new palette anyway.
+    if (mListener) {
+        ScreenManager::instance().rebuild();
+    }
 }
 
 // --- State -----------------------------------------------------------------
@@ -269,6 +293,13 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
             mTime.tm_sec   = c.sec;
             mTime.tm_wday  = c.wday;
         } break;
+
+        case CustomMessage::SETTINGS:
+            mSettings    = static_cast<CustomMessage::SettingsMsg*>(message)->settings;
+            mHasSettings = true;
+            applyScheme();
+            l->onSettings();
+            break;
 
         case CustomMessage::SAVED:
             l->onSaved(static_cast<CustomMessage::Saved*>(message)->sessionId);

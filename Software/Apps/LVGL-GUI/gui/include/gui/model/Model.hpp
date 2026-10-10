@@ -65,6 +65,9 @@ public:
     void clearResults() { mHasResults = false; }
     void requestHistory();
     void exitApp();
+    /// Store @p s, apply its scheme here at once (applyScheme()) and send it
+    /// to the service, which answers with SETTINGS.
+    void setSettings(const score::Settings& s);
 
     // --- State (latest from the service) ------------------------------------
     bool hasSnapshot() const { return mHasSnapshot; }
@@ -102,6 +105,11 @@ public:
     /// Today as YYYYMMDD; 0 before the clock is known.
     uint32_t todayYmd() const;
 
+    /// The settings the service last sent (SETTINGS) or setSettings() set;
+    /// the defaults until then (hasSettings() false).
+    const score::Settings& settings() const { return mSettings; }
+    bool hasSettings() const { return mHasSettings; }
+
     // --- Navigation memory ---------------------------------------------------
     enum class PickerMode : uint8_t { StartOpen, ChangeSpot, StepSpot };
     PickerMode pickerMode = PickerMode::StartOpen;
@@ -113,6 +121,7 @@ public:
 
     uint8_t homeIndex = 0;   ///< HomeScreen's selected action (its Action enum), not a row
     uint8_t workoutsIndex = 0, historyIndex = 0, resultsPage = 0;
+    uint8_t settingsIndex = 0;   ///< SettingsScreen's selected row
     uint8_t selectedWorkoutId = 1;   ///< preview / start
 
     /// Set by Pause when it routes to Rest / Active after the session runs
@@ -147,6 +156,10 @@ private:
     // ICustomMessageHandler
     bool customMessageHandler(SDK::MessageBase* message) override;
 
+    /// Make mSettings' scheme the active palette; when it changed and a
+    /// screen is on display, rebuild that screen in it.
+    void applyScheme();
+
     ModelListener*     mListener = nullptr;
     const SDK::Kernel& mKernel;
 
@@ -167,6 +180,9 @@ private:
 
     CustomMessage::StepDone mStepDone;
     bool                    mHasStepDone = false;
+
+    score::Settings mSettings    = score::Settings::defaults();
+    bool            mHasSettings = false;
 
     std::tm        mTime {};
     score::Workout mDraft {};

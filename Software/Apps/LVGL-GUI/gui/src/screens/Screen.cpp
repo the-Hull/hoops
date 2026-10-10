@@ -24,7 +24,8 @@ void Screen::create()
         return;
     }
     mRoot = lv_obj_create(nullptr);
-    Theme::applyScreen(mRoot);
+    Theme::applyScreen(mRoot);   // paints black
+    lv_obj_set_style_bg_color(mRoot, Theme::rgb(Theme::kBg), LV_PART_MAIN);
     lv_obj_add_event_cb(mRoot, &Screen::keyEventCb, LV_EVENT_KEY, this);
     build();
 }
@@ -36,6 +37,13 @@ void Screen::destroy()
     }
     lv_obj_delete(mRoot);
     mRoot = nullptr;
+}
+
+void Screen::onIdleTimeout()
+{
+    if (!mModel.sessionRunning()) {
+        mModel.exitApp();
+    }
 }
 
 void Screen::keyEventCb(lv_event_t* e)

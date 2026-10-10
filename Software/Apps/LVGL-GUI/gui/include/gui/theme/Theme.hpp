@@ -38,15 +38,31 @@ enum class Font : uint8_t {
 
 const lv_font_t* font(Font f);
 
-// Palette (SDK 64-colour values, rendered exactly by the display).
-constexpr uint32_t kText   = SDK::GUI::Color::WHITE;
-constexpr uint32_t kDim    = SDK::GUI::Color::GRAY;
-constexpr uint32_t kLine   = SDK::GUI::Color::GRAY_DARK;
-constexpr uint32_t kAccent = SDK::GUI::Color::TEAL;
-constexpr uint32_t kGood   = SDK::GUI::Color::GREEN;
-constexpr uint32_t kBad    = SDK::GUI::Color::RED;
-constexpr uint32_t kAmber  = SDK::GUI::Color::YELLOW_DARK;
-constexpr uint32_t kBg     = SDK::GUI::Color::BLACK;
+/// The colour schemes (spec §3); values mirror score::Scheme.
+enum class Scheme : uint8_t { Dark, Light };
+
+// The active palette (SDK 64-colour values, rendered exactly by the display).
+// setScheme() rewrites these — keep reading them at build/draw time, never
+// cache in a constexpr (or a static) — a rebuilt screen then draws in the new
+// scheme. The initialisers are the Dark scheme.
+inline uint32_t kText   = SDK::GUI::Color::WHITE;
+inline uint32_t kDim    = SDK::GUI::Color::GRAY;
+inline uint32_t kLine   = SDK::GUI::Color::GRAY_DARK;
+inline uint32_t kAccent = SDK::GUI::Color::TEAL;
+inline uint32_t kGood   = SDK::GUI::Color::GREEN;
+inline uint32_t kBad    = SDK::GUI::Color::RED;
+inline uint32_t kAmber  = SDK::GUI::Color::YELLOW_DARK;
+inline uint32_t kBg     = SDK::GUI::Color::BLACK;
+
+/// Make @p s the active palette (all eight tokens). Screens already built
+/// keep their colours: rebuild them (Model::applyScheme() does).
+void setScheme(Scheme s);
+
+/// The active scheme.
+Scheme scheme();
+
+/// The SDK's Draw::init(), then setScheme(Scheme::Dark).
+void init();
 
 /// Colour for a shooting percentage: kGood >= 50 %, kAmber 35-49 %, kBad
 /// < 35 %; kDim with no attempts. Thresholds on the rounded percentage
@@ -55,7 +71,6 @@ uint32_t pctColor(uint16_t makes, uint16_t attempts);
 
 // The SDK's drawing helpers, under the app's name for them.
 using SDK::LVGL::Draw::rgb;
-using SDK::LVGL::Draw::init;
 using SDK::LVGL::Draw::applyScreen;
 using SDK::LVGL::Draw::setHidden;
 using SDK::LVGL::Draw::container;

@@ -278,15 +278,15 @@ void ResultsScreen::buildCourt()
 
     // Legend: ● >=50  ● 35-49  ● <35 (the faces have neither ≥ nor the en dash).
     struct Entry { uint32_t color; const char* text; };
-    constexpr Entry kLegend[] = { { Theme::kGood, ">=50" }, { Theme::kAmber, "35-49" }, { Theme::kBad, "<35" } };
+    const Entry legend[] = { { Theme::kGood, ">=50" }, { Theme::kAmber, "35-49" }, { Theme::kBad, "<35" } };
     constexpr int32_t kDotGap = 3;    // dot .. text
     constexpr int32_t kItemGap = 10;  // text .. next dot
     int32_t total = 0;
-    for (const Entry& e : kLegend) {
+    for (const Entry& e : legend) {
         total += 2 * kLegendDotR + kDotGap + Theme::textWidth(Font::Regular14, e.text) + kItemGap;
     }
     int32_t x = 120 - (total - kItemGap) / 2;
-    for (const Entry& e : kLegend) {
+    for (const Entry& e : legend) {
         Theme::dot(mPageObj, x + kLegendDotR, kLegendY, kLegendDotR, e.color);
         x += 2 * kLegendDotR + kDotGap;
         const int32_t w = Theme::textWidth(Font::Regular14, e.text);

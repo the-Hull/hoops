@@ -44,6 +44,7 @@ public:
     void onStepDone(const CustomMessage::StepDone& d) override;
     void onSaved(uint32_t id) override;
     void onSuspend() override;
+    void onIdleTimeout() override {}   // a session (or its unsaved done summary) is on, never exit on idle
 
     static constexpr uint32_t kEndMs = 3000;   ///< save reply watchdog
 

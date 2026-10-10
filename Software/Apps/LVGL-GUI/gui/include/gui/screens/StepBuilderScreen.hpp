@@ -45,6 +45,7 @@ public:
 
     void onWorkoutSaved(uint8_t id) override;
     void onSuspend() override;
+    void onIdleTimeout() override {}   // an unsaved draft: never exit on idle
 
     static constexpr uint32_t kConfirmMs = 3000;   ///< Delete workout confirmation window
     static constexpr uint32_t kToastMs   = 2000;

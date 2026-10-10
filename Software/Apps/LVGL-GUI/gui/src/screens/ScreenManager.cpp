@@ -53,6 +53,13 @@ void ScreenManager::goTo(ScreenId id)
     }
 }
 
+void ScreenManager::rebuild()
+{
+    if (mModel && !mPendingSet) {
+        goTo(mCurrentId);
+    }
+}
+
 void ScreenManager::asyncCb(void* user)
 {
     auto* self = static_cast<ScreenManager*>(user);
@@ -139,6 +146,8 @@ Screen* ScreenManager::create(ScreenId id)
             return new RestScreen(m);
         case ScreenId::StepBuilder:
             return new StepBuilderScreen(m);
+        case ScreenId::Settings:
+            return nullptr;   // no Settings screen yet: switchNow() logs and stays
     }
     return nullptr;
 }

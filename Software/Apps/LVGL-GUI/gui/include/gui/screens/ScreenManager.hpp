@@ -29,6 +29,7 @@ enum class ScreenId : uint8_t {
     Pause,
     Results,
     History,
+    Settings,
 };
 
 class ScreenManager
@@ -44,6 +45,12 @@ public:
 
     /// The screen on display (or the one last requested by start()).
     ScreenId current() const { return mCurrentId; }
+
+    /// Rebuild the screen on display (e.g. in a new colour scheme): a switch
+    /// to the same id, which reopens in place from the navigation memory its
+    /// onHide() stored. A switch already pending builds a fresh screen
+    /// anyway, so it is left to happen instead.
+    void rebuild();
 
 private:
     ScreenManager() = default;

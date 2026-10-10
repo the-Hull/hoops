@@ -38,6 +38,37 @@ const lv_font_t* font(Font f)
     return &poppins_regular_18;
 }
 
+namespace
+{
+Scheme sScheme = Scheme::Dark;
+} // namespace
+
+void setScheme(Scheme s)
+{
+    using namespace SDK::GUI::Color;
+    const bool light = s == Scheme::Light;
+    kBg     = light ? WHITE       : BLACK;
+    kText   = light ? BLACK       : WHITE;
+    kDim    = light ? GRAY_DARK   : GRAY;
+    kLine   = light ? GRAY        : GRAY_DARK;
+    kAccent = TEAL;
+    kGood   = light ? GREEN_MID   : GREEN;
+    kBad    = RED;
+    kAmber  = light ? ORANGE_DARK : YELLOW_DARK;
+    sScheme = light ? Scheme::Light : Scheme::Dark;
+}
+
+Scheme scheme()
+{
+    return sScheme;
+}
+
+void init()
+{
+    SDK::LVGL::Draw::init();
+    setScheme(Scheme::Dark);
+}
+
 uint32_t pctColor(uint16_t makes, uint16_t attempts)
 {
     if (attempts == 0) {
