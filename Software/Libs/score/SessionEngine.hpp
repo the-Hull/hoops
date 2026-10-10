@@ -28,11 +28,13 @@ struct Snapshot {
     uint8_t  hr, flags, nextSpot, pad;
     uint16_t workoutId;
     uint8_t  pad1[2];
+    uint64_t stepBits;                 ///< bit i = current step's i-th shot (1 = made), first 64
     static constexpr uint8_t kFull = 1, kWorkoutDone = 2, kResumable = 4;   ///< flags
     static constexpr uint8_t kModeOpen = 0, kModeWorkout = 1;                ///< mode
 };
 static_assert(std::is_trivially_copyable<Snapshot>::value, "Snapshot must stay POD");
-static_assert(sizeof(Snapshot) <= 48, "Snapshot must fit an IPC message");
+static_assert(sizeof(Snapshot) == 48, "Snapshot must fit an IPC message");
+static_assert(offsetof(Snapshot, stepBits) == 40, "Snapshot layout changed");
 static_assert(offsetof(Snapshot, elapsed_s) == 24, "Snapshot layout changed");
 static_assert(std::has_unique_object_representations<Snapshot>::value, "Snapshot: no padding");
 
