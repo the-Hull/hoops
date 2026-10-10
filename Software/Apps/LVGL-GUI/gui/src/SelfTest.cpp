@@ -1367,6 +1367,125 @@ const Step kPhase2[] = {
                              '4', "Home: BACK -> exit app" },
 };
 
+// --- Full store (HOOPS_SELFTEST_PHASE=3) --------------------------------------------
+// Software/Output seeded by Tests/Host's hoops-seed-index: 50 indexed sessions
+// (ids 1780000000 + i * 86400, i = 0 oldest) with their files, 10 user
+// workouts. The worst case for the GUI's 10-message queue: History asks for
+// 10 workouts, then pulls 10 pages, one at a time.
+
+constexpr uint32_t kSeedOldestId = 1780000000u;
+constexpr uint32_t kSeedDay      = 86400u;
+
+/// The settings' scheme is the palette in use (Light seeded: the start-up rebuild).
+bool schemeApplied(const Model& m)
+{
+    const bool light = m.settings().scheme == u8(score::Scheme::Light);
+    return Theme::kBg == (light ? SDK::GUI::Color::WHITE : SDK::GUI::Color::BLACK);
+}
+
+/// Every row held is the seeded one: newest first, contiguous.
+bool seededRows(const Model& m, uint8_t n)
+{
+    for (uint8_t i = 0; i < n; ++i) {
+        if (m.historyItem(i).id != kSeedOldestId + static_cast<uint32_t>(score::kIndexCapacity - 1 - i) * kSeedDay) {
+            LOG_INFO("row %u: id %lu\n", i, static_cast<unsigned long>(m.historyItem(i).id));
+            return false;
+        }
+    }
+    return true;
+}
+
+/// History's line 2 for row @p i ("m/a · p %", drawn " - ").
+void historyLine2(const Model& m, uint8_t i, char* out, size_t n)
+{
+    const score::SessionSummary& r = m.historyItem(i);
+    unsigned makes = 0;
+    unsigned att   = 0;
+    for (uint8_t c = 0; c < score::kCategoryCount; ++c) {
+        makes += r.catMakes[c];
+        att   += r.catAtt[c];
+    }
+    snprintf(out, n, "%u/%u - %u %%", makes, att, static_cast<unsigned>(r.totalPct));
+}
+
+// Start-up: SETTINGS and LOCAL_TIME in, Home pulled the first page only (5 of 50).
+bool p3Home(const Model& m)
+{
+    LOG_INFO("p3 home: settings %d, today %lu, history %u of %u, workouts %d\n", m.hasSettings(),
+             static_cast<unsigned long>(m.todayYmd()), m.historyCount(), m.historyTotal(), m.workoutsLoaded());
+    return onHome(m) && m.hasSettings() && schemeApplied(m) && m.todayYmd() != 0 && m.hasHistory()
+        && m.historyTotal() == score::kIndexCapacity && m.historyCount() == score::kTrendCount && seededRows(m, 5)
+        && visibleLabel("Open Session") && onScreenLabel("Last - ", 0, true);
+}
+// History returns to the oldest row once it arrives (the selection memory).
+void selectOldestRow() { sModel->historyIndex = score::kIndexCapacity - 1; }
+bool p3HistoryLoading(const Model& m)
+{
+    LOG_INFO("p3 history: %u of %u rows, workouts %d\n", m.historyCount(), m.historyTotal(), m.workoutsLoaded());
+    return onScreen(ScreenId::History) && visibleLabel("Loading\xE2\x80\xA6") && !m.historyComplete();
+}
+bool p3History50(const Model& m)
+{
+    LOG_INFO("p3 history: %u of %u rows, %u workouts\n", m.historyCount(), m.historyTotal(), m.userWorkoutCount());
+    char oldest[24];
+    historyLine2(m, score::kIndexCapacity - 1, oldest, sizeof(oldest));
+    return onScreen(ScreenId::History) && m.historyComplete() && m.historyCount() == score::kIndexCapacity
+        && seededRows(m, score::kIndexCapacity) && m.workoutsLoaded()
+        && m.userWorkoutCount() == score::kMaxUserWorkouts && !visibleLabel("Loading\xE2\x80\xA6")
+        && menuSelected(oldest);
+}
+bool p3ResultsOldest(const Model& m)
+{
+    return onScreen(ScreenId::Results) && m.resultsPage == 0 && m.resultsFrom == Model::ResultsFrom::History
+        && m.hasResults() && m.results().sessionId == kSeedOldestId && m.resultsSessionId == kSeedOldestId
+        && onScreenLabel("SESSION - 1 / 4");
+}
+bool p3HistoryAgain(const Model& m)
+{
+    char oldest[24];
+    historyLine2(m, score::kIndexCapacity - 1, oldest, sizeof(oldest));
+    return onScreen(ScreenId::History) && m.historyComplete() && m.historyCount() == score::kIndexCapacity
+        && menuSelected(oldest);
+}
+bool p3Settings(const Model& m)
+{
+    return onSettings() && m.hasSettings() && menuSelected("Goal type") && !visibleLabel("Loading\xE2\x80\xA6");
+}
+bool p3Clear50(const Model& m)
+{
+    return settingsRow("Clear history", "50 sessions") && m.historyTotal() == score::kIndexCapacity;
+}
+bool p3End(const Model& m)
+{
+    return onHome(m) && m.hasSettings() && schemeApplied(m) && m.historyTotal() == score::kIndexCapacity
+        && onScreenLabel("Last - ", 0, true);
+}
+
+const Step kPhase3[] = {
+    { 1500, p3Home, "phase 3: Home footer, settings and date in, first history page only (5 of 50)",
+                             '2', "Home: DOWN (Workouts)" },
+    {  300, nullptr, nullptr, '2', "Home: DOWN (History)", &selectOldestRow },
+    {  300, nullptr, nullptr, '3', "Home: SELECT -> History (10 workouts, then 10 pages)" },
+    // The next frame: the workouts take one round trip, each page another.
+    {    1, p3HistoryLoading, "phase 3: History shows Loading... while the workouts and pages come",
+                             0, "History: wait" },
+    { 2500, p3History50, "phase 3: History lists all 50 rows (complete, in order), 10 workouts, oldest selected",
+                             '3', "History: SELECT the oldest -> Results" },
+    { 1500, p3ResultsOldest, "phase 3: Results of the oldest session, page 1",
+                             '4', "Results: BACK -> History" },
+    { 2500, p3HistoryAgain, "phase 3: back on History, 50 rows again, oldest still selected",
+                             '4', "History: BACK -> Home" },
+    {  800, nullptr, nullptr, '2', "Home: DOWN (Settings)" },
+    {  300, nullptr, nullptr, '3', "Home: SELECT -> Settings" },
+    {  800, p3Settings, "phase 3: Settings loaded (hasSettings, no Loading...)",
+                             '1', "Settings: UP (About)" },
+    {  300, nullptr, nullptr, '1', "Settings: UP (Clear history)" },
+    {  500, p3Clear50, "phase 3: Settings Clear history reads 50 sessions",
+                             '4', "Settings: BACK -> Home" },
+    {  800, p3End, "phase 3: Home again with the footer and the scheme kept",
+                             '4', "Home: BACK -> exit app" },
+};
+
 const Step* sSteps = kSteps;
 uint32_t    sCount = sizeof(kSteps) / sizeof(kSteps[0]);
 
@@ -1476,7 +1595,7 @@ void startSelfTest(Model& model)
 {
     sModel = &model;
     // HOOPS_SELFTEST_PHASE: unset = the full walk; 1 = start a session and
-    // crash; 2 = the restart (crash resume).
+    // crash; 2 = the restart (crash resume); 3 = a seeded full store.
     const char* phase = getenv("HOOPS_SELFTEST_PHASE");
     if (phase && strcmp(phase, "1") == 0) {
         sSteps = kPhase1;
@@ -1484,6 +1603,9 @@ void startSelfTest(Model& model)
     } else if (phase && strcmp(phase, "2") == 0) {
         sSteps = kPhase2;
         sCount = sizeof(kPhase2) / sizeof(kPhase2[0]);
+    } else if (phase && strcmp(phase, "3") == 0) {
+        sSteps = kPhase3;
+        sCount = sizeof(kPhase3) / sizeof(kPhase3[0]);
     }
     // HOOPS_SHOTS_DIR: an existing directory (absolute: the cwd is build/bin)
     // for the steps' screenshots.

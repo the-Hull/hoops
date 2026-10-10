@@ -21,3 +21,7 @@ target_link_libraries(hoops-host-tests PRIVATE GTest::gtest_main)
 enable_testing()
 include(GoogleTest)
 gtest_discover_tests(hoops-host-tests)
+
+# Host tool for the self-test's phase 3: a full index + 50 session files + 10 user workouts.
+add_executable(hoops-seed-index ${SCORE_SOURCES} "${CMAKE_CURRENT_LIST_DIR}/tools/seed_index.cpp")
+target_include_directories(hoops-seed-index PRIVATE "${LIBS}")

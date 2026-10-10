@@ -158,6 +158,15 @@ TEST(History, BestNeedsRankThreshold) {
     EXPECT_EQ(ix.best[idx(Spot::LayupL)].makes, 3);
     EXPECT_EQ(ix.best[idx(Spot::LayupL)].attempts, 5);
 }
+TEST(History, LowAttemptsNeverOverwriteRankedBest) {
+    SessionIndex ix{};
+    ix.recordSpots(one(Spot::Ft, 3, 6).a);       // ranked, 50 %
+    ix.recordSpots(one(Spot::Ft, 4, 4).a);       // 100 %, but 4 < kMinAttemptsForRank
+    EXPECT_EQ(ix.last[idx(Spot::Ft)].makes, 4);  // last still follows the newest
+    EXPECT_EQ(ix.last[idx(Spot::Ft)].attempts, 4);
+    EXPECT_EQ(ix.best[idx(Spot::Ft)].makes, 3);
+    EXPECT_EQ(ix.best[idx(Spot::Ft)].attempts, 6);
+}
 TEST(History, BestTieKeepsOlder) {
     SessionIndex ix{};
     ix.recordSpots(one(Spot::Ft, 5, 10).a);    // 50 %
