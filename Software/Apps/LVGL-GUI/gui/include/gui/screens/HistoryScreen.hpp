@@ -52,6 +52,8 @@ private:
     /// Rebuild the rows from Model::historyItem(); "Loading…" before the
     /// first page, "No sessions yet" when the index is empty.
     void updateItems();
+    /// Ask for the whole index (after the user workouts are in).
+    void startHistory();
     /// Workout name for a summary's workoutId into @p out.
     void workoutName(char* out, size_t n, uint16_t id) const;
     void open();
@@ -65,6 +67,7 @@ private:
     char           mLine1[kMaxRows][48] = {};
     char           mLine2[kMaxRows][24] = {};
     uint8_t        mCount = 0;
+    bool           mStarted = false;   ///< this visit's history stream asked for
     /// Model::historyIndex to restore once that row has arrived; kNoWant
     /// once it is placed, the user moved or the history is complete.
     int16_t        mWant  = kNoWant;

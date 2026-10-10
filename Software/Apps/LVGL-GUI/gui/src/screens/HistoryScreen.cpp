@@ -44,9 +44,21 @@ void HistoryScreen::build()
 
 void HistoryScreen::onShow()
 {
-    mModel.requestHistory();    // the rows held are dropped: "Loading…"
-    mModel.requestWorkouts();   // user workout names
+    // The user workout names first, then the whole index: never both replies
+    // in one frame (10 items + pages would overflow the GUI's message queue).
     mWant = mModel.historyIndex;
+    if (mModel.workoutsLoaded()) {
+        startHistory();
+    } else {
+        mModel.requestWorkouts();
+        updateItems();   // "Loading…"
+    }
+}
+
+void HistoryScreen::startHistory()
+{
+    mStarted = true;
+    mModel.requestHistory(true);   // the rows held are dropped: "Loading…"
     updateItems();
 }
 
@@ -83,7 +95,7 @@ void HistoryScreen::workoutName(char* out, size_t n, uint16_t id) const
 
 void HistoryScreen::updateItems()
 {
-    const bool loaded = mModel.hasHistory();
+    const bool loaded = mStarted && mModel.hasHistory();
     // Keep the selection as pages arrive (they only append rows).
     const uint16_t prev = mCount > 0 ? mMenu->selected() : 0;
     const uint8_t  n    = loaded ? mModel.historyCount() : 0;
@@ -169,7 +181,9 @@ void HistoryScreen::onHistory()
 
 void HistoryScreen::onWorkouts()
 {
-    if (mModel.hasHistory()) {
+    if (!mStarted) {
+        startHistory();
+    } else if (mModel.hasHistory()) {
         updateItems();
     }
 }

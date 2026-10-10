@@ -87,7 +87,10 @@ void SettingsScreen::build()
 
 void SettingsScreen::onShow()
 {
-    mModel.requestHistory();   // for the Clear history count
+    mModel.requestHistory(false);   // the first page carries the total: the Clear history count
+    if (!mModel.hasSettings()) {
+        mModel.requestSettings();   // SELECT waits for them (change())
+    }
     refresh();
 }
 
@@ -126,6 +129,12 @@ void SettingsScreen::refresh()
     text(kHeartRate, onOff(s.heartRate));
     text(kScheme, static_cast<score::Scheme>(s.scheme) == score::Scheme::Light ? "Light" : "Dark");
     text(kCsv, onOff(s.csvExport));
+    if (!mModel.hasSettings()) {
+        // Not known yet: no value to show, and none to step from (change()).
+        for (uint8_t row = kGoalType; row <= kCsv; ++row) {
+            text(row, "Loading\xE2\x80\xA6");
+        }
+    }
 
     const uint8_t total = mModel.historyTotal();
     if (mConfirmTimer) {
@@ -144,6 +153,11 @@ void SettingsScreen::refresh()
 
 void SettingsScreen::change(uint8_t row)
 {
+    // Until the service's SETTINGS is in, mEdit holds the defaults: a change
+    // would store defaults + one step over the user's settings.bin.
+    if (!mModel.hasSettings()) {
+        return;
+    }
     score::Settings& s = mEdit;
     switch (row) {
         case kGoalType:

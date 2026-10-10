@@ -63,12 +63,16 @@ public:
     void requestResults(uint32_t sessionId);   ///< 0 = the session just ended
     /// Forget the results held, so the Results screen requests fresh ones.
     void clearResults() { mHasResults = false; }
-    /// Ask for the whole index; the service streams it in pages of
-    /// kTrendCount rows, newest first (onHistory() fires per page).
-    void requestHistory();
-    /// Delete every saved session; the service answers with an empty
-    /// HISTORY page (onHistory(), historyTotal() 0) and SPOT_STATS.
+    /// Start a history stream: the rows held are dropped and the first page
+    /// (kTrendCount rows, newest first, with the total) is asked for. With
+    /// @p all the Model then pulls page after page, one in flight at a time,
+    /// until historyComplete(). onHistory() fires per page.
+    void requestHistory(bool all);
+    /// Delete every saved session; the service answers with SPOT_STATS and
+    /// the empty first page follows (onHistory(), historyTotal() 0).
     void clearHistory();
+    /// Ask for SETTINGS and LOCAL_TIME again (onResume() while !hasSettings()).
+    void requestSettings();
     /// Ask for the per-spot last / best records (onSpotStats()).
     void requestSpotStats();
     void exitApp();
@@ -104,7 +108,8 @@ public:
     bool hasResults() const { return mHasResults; }
 
     /// The history index, newest first, as far as its pages have arrived.
-    /// hasHistory(): the first page of the latest requestHistory() is in;
+    /// hasHistory(): the first page of the latest requestHistory() is in
+    /// (a stream without `all` stops there);
     /// historyCount(): rows received (contiguous from the newest);
     /// historyTotal(): rows in the index; historyComplete(): all of them in.
     bool    hasHistory() const { return mHasHistory; }
@@ -188,6 +193,7 @@ private:
 
     bool     mIsRunning = false;
     uint32_t mIdleTimer = 0;
+    uint32_t mFrame     = 0;   ///< frames since start (onFrame())
 
     score::Snapshot mSnapshot {};
     bool            mHasSnapshot = false;
@@ -195,6 +201,9 @@ private:
     score::Workout mUserWorkouts[score::kMaxUserWorkouts] {};
     uint8_t        mUserCount      = 0;
     bool           mWorkoutsLoaded = false;
+    static constexpr uint32_t kWorkoutsRetryFrames = 10;   ///< 1 s
+    bool           mWorkoutsPending = false;   ///< GET_WORKOUTS sent, list not complete yet
+    uint32_t       mWorkoutsAskedAt = 0;       ///< mFrame of that request
 
     CustomMessage::Results mResults;
     bool                   mHasResults = false;
@@ -202,6 +211,8 @@ private:
     uint8_t               mHistoryTotal  = 0;
     uint8_t               mHistoryLoaded = 0;
     bool                  mHasHistory    = false;
+    uint8_t               mHistorySeq    = 0;       ///< the latest stream's; pages echo it
+    bool                  mHistoryAll    = false;   ///< that stream pulls every page
 
     score::SpotStat mSpotLast[score::kSpotCount] {};
     score::SpotStat mSpotBest[score::kSpotCount] {};

@@ -57,7 +57,7 @@ void HomeScreen::onShow()
         mModel.homeToast = nullptr;
     }
     mModel.requestSnapshot();
-    mModel.requestHistory();
+    mModel.requestHistory(false);   // the first page: the newest row for the footer
 }
 
 void HomeScreen::onHide()

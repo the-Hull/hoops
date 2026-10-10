@@ -186,7 +186,9 @@ void ResultsScreen::build()
 
 void ResultsScreen::onShow()
 {
-    mModel.requestHistory();   // the trend's older sessions
+    // The trend's older sessions: the first page holds the newest ones; a
+    // saved session from History may be older, so that pulls the whole index.
+    mModel.requestHistory(mModel.resultsFrom == Model::ResultsFrom::History);
     if (!mModel.hasResults()) {
         mWaiting = true;
         mModel.requestResults(mModel.resultsFrom == Model::ResultsFrom::History ? mModel.resultsSessionId : 0);
@@ -638,8 +640,8 @@ void ResultsScreen::onResults()
 
 void ResultsScreen::onHistory()
 {
-    // Pages stream in a burst: redraw on the first (the newest rows) and on
-    // the last (an older session's neighbours), not on every one.
+    // Pages are pulled one by one: redraw on the first (the newest rows) and
+    // on the last (an older session's neighbours), not on every one.
     if (mPage == kTrend && mModel.hasResults()
         && (mModel.historyCount() <= score::kTrendCount || mModel.historyComplete())) {
         rebuild();

@@ -48,6 +48,7 @@ constexpr SDK::MessageType::Type GET_HISTORY    = 0x0110;
 constexpr SDK::MessageType::Type SET_SETTINGS   = 0x0111;
 constexpr SDK::MessageType::Type GET_SPOT_STATS = 0x0112;
 constexpr SDK::MessageType::Type CLEAR_HISTORY  = 0x0113;
+constexpr SDK::MessageType::Type GET_SETTINGS   = 0x0114;
 
 // Service --> GUI
 constexpr SDK::MessageType::Type SNAPSHOT      = 0x0201;
@@ -151,8 +152,14 @@ struct GetResults : public SDK::MessageBase {
     explicit GetResults(uint32_t id = 0) : SDK::MessageBase(GET_RESULTS), sessionId(id) {}
 };
 
+/// One page of the index, rows offset .. offset + kTrendCount - 1 (newest first); the
+/// service answers with exactly one HISTORY page that echoes @p seq (pull-based paging:
+/// the GUI asks for the next page when one arrives, so one HISTORY is in flight at most).
 struct GetHistory : public SDK::MessageBase {
-    GetHistory() : SDK::MessageBase(GET_HISTORY) {}
+    uint8_t offset;
+    uint8_t seq;
+    uint8_t pad[2] = {};
+    explicit GetHistory(uint8_t o = 0, uint8_t s = 0) : SDK::MessageBase(GET_HISTORY), offset(o), seq(s) {}
 };
 
 /// Store and apply; the service answers with SETTINGS (an invalid one is ignored, answered with the current).
@@ -167,8 +174,14 @@ struct GetSpotStats : public SDK::MessageBase {
 };
 
 /// Delete every indexed session (files, CSVs, index, spot records); a running session is unaffected.
+/// The service answers with SPOT_STATS; the GUI follows it with a GET_HISTORY for the (empty) page.
 struct ClearHistory : public SDK::MessageBase {
     ClearHistory() : SDK::MessageBase(CLEAR_HISTORY) {}
+};
+
+/// The service answers with SETTINGS and LOCAL_TIME (the GUI asks while it has no SETTINGS).
+struct GetSettings : public SDK::MessageBase {
+    GetSettings() : SDK::MessageBase(GET_SETTINGS) {}
 };
 
 // ---------------------------------------------------------------- Service --> GUI
@@ -216,13 +229,14 @@ struct Results : public SDK::MessageBase {
     Results() : SDK::MessageBase(RESULTS) {}
 };
 
-/// One page of the index, newest first: items[0] is row `offset` of `total`; count rows here.
-/// GET_HISTORY streams ceil(total / kTrendCount) pages (one {0, 0, 0} page when the index is empty).
+/// One page of the index, newest first: items[0] is row `offset` of `total`; count rows here
+/// (count 0 past the end, e.g. {0, 0, 0} for an empty index). The answer to one GET_HISTORY,
+/// whose `seq` it echoes.
 struct History : public SDK::MessageBase {
     uint8_t               total  = 0;
     uint8_t               offset = 0;
     uint8_t               count  = 0;
-    uint8_t               pad    = 0;
+    uint8_t               seq    = 0;
     score::SessionSummary items[score::kTrendCount] = {};
     History() : SDK::MessageBase(HISTORY) {}
 };
@@ -276,6 +290,7 @@ static_assert(sizeof(GetHistory)    <= 256, "GetHistory exceeds the message bloc
 static_assert(sizeof(SetSettings)   <= 256, "SetSettings exceeds the message block");
 static_assert(sizeof(GetSpotStats)  <= 256, "GetSpotStats exceeds the message block");
 static_assert(sizeof(ClearHistory)  <= 256, "ClearHistory exceeds the message block");
+static_assert(sizeof(GetSettings)   <= 256, "GetSettings exceeds the message block");
 static_assert(sizeof(SnapshotMsg)   <= 256, "SnapshotMsg exceeds the message block");
 static_assert(sizeof(UndoResult)    <= 256, "UndoResult exceeds the message block");
 static_assert(sizeof(StepDone)      <= 256, "StepDone exceeds the message block");
@@ -298,7 +313,7 @@ static_assert(payloadIs<StartOpen>(4) && payloadIs<StartWorkout>(4) && payloadIs
 static_assert(payloadIs<Undo>(0) && payloadIs<Pause>(0) && payloadIs<Resume>(0) && payloadIs<SkipRest>(0),
               "implicit padding");
 static_assert(payloadIs<ExtendRest>(4) && payloadIs<ChangeSpot>(4) && payloadIs<EndSession>(4), "implicit padding");
-static_assert(payloadIs<GetSnapshot>(0) && payloadIs<GetWorkouts>(0) && payloadIs<GetHistory>(0), "implicit padding");
+static_assert(payloadIs<GetSnapshot>(0) && payloadIs<GetWorkouts>(0) && payloadIs<GetHistory>(4), "implicit padding");
 static_assert(payloadIs<SaveWorkout>(sizeof(score::Workout) + 2), "implicit padding");
 static_assert(payloadIs<DeleteWorkout>(4) && payloadIs<GetResults>(4), "implicit padding");
 static_assert(payloadIs<SnapshotMsg>(sizeof(score::Snapshot)) && payloadIs<UndoResult>(4), "implicit padding");
@@ -311,7 +326,8 @@ static_assert(payloadIs<History>(4 + 36 * 5), "History page layout changed");
 static_assert(payloadIs<LocalTime>(sizeof(Clock)) && payloadIs<Saved>(4) && payloadIs<WorkoutSaved>(4),
               "implicit padding");
 static_assert(payloadIs<SetSettings>(12) && payloadIs<SettingsMsg>(12), "implicit padding");
-static_assert(payloadIs<GetSpotStats>(0) && payloadIs<ClearHistory>(0), "implicit padding");
+static_assert(payloadIs<GetSpotStats>(0) && payloadIs<ClearHistory>(0) && payloadIs<GetSettings>(0),
+              "implicit padding");
 static_assert(payloadIs<SpotStats>(104), "implicit padding");
 static_assert(sizeof(score::SpotStat) == 4 && std::has_unique_object_representations<score::SpotStat>::value,
               "SpotStat: no padding");

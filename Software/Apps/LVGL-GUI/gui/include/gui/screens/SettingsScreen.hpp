@@ -9,7 +9,10 @@
  * change goes to the service at once (Model::setSettings() from the local
  * copy mEdit); the SETTINGS echo (onSettings()) overwrites the copy. The
  * colour scheme row rebuilds the screen through the Model; the selection is
- * kept in Model::settingsIndex.
+ * kept in Model::settingsIndex. Until the service's SETTINGS is in
+ * (Model::hasSettings(); asked for on show with GET_SETTINGS) the setting
+ * rows read "Loading…" and SELECT does nothing, so the defaults never
+ * overwrite the stored settings.
  *
  * Clear history: line 2 "N sessions" (Model::historyTotal(), requested on
  * show) or "Nothing to clear"; the first SELECT asks "SELECT again to

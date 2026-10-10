@@ -37,7 +37,7 @@ private:
     void sendUndoResult(bool ok, bool made);
     void sendWorkouts();
     void sendResults(uint32_t sessionId);
-    void sendHistory();
+    void sendHistory(uint8_t offset, uint8_t seq);   ///< one HISTORY page (pull-based)
     void sendSpotStats();
     void clearHistory();
     void sendLocalTime();

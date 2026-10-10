@@ -76,6 +76,15 @@ void Model::deleteWorkout(uint8_t id)      { SDK::send_msg<CustomMessage::Delete
 void Model::requestWorkouts()
 {
     mWorkoutsLoaded = false;   // the list already held stays readable meanwhile
+    // One list in flight: a second request in the same frame (e.g. the
+    // WORKOUT_SAVED handler and the preview's onShow) would double the burst
+    // past the GUI's 10-message queue. A list lost on the way is asked for
+    // again by the next request after kWorkoutsRetryFrames.
+    if (mWorkoutsPending && mFrame - mWorkoutsAskedAt < kWorkoutsRetryFrames) {
+        return;
+    }
+    mWorkoutsPending = true;
+    mWorkoutsAskedAt = mFrame;
     SDK::send_msg<CustomMessage::GetWorkouts>(mKernel);
 }
 
@@ -85,17 +94,27 @@ void Model::requestResults(uint32_t sessionId)
     SDK::send_msg<CustomMessage::GetResults>(mKernel, sessionId);
 }
 
-void Model::requestHistory()
+void Model::requestHistory(bool all)
 {
+    // A new stream: pages of an older one still on their way carry its seq
+    // and are dropped.
+    ++mHistorySeq;
+    mHistoryAll    = all;
     mHasHistory    = false;
     mHistoryTotal  = 0;
     mHistoryLoaded = 0;
-    SDK::send_msg<CustomMessage::GetHistory>(mKernel);
+    SDK::send_msg<CustomMessage::GetHistory>(mKernel, static_cast<uint8_t>(0), mHistorySeq);
 }
 
 void Model::clearHistory()
 {
     SDK::send_msg<CustomMessage::ClearHistory>(mKernel);
+    requestHistory(false);   // handled after the clear: the empty page
+}
+
+void Model::requestSettings()
+{
+    SDK::send_msg<CustomMessage::GetSettings>(mKernel);
 }
 
 void Model::requestSpotStats()
@@ -208,6 +227,7 @@ void Model::onStart()
 
 void Model::onFrame()
 {
+    ++mFrame;
     if (mIsRunning && mIdleTimer > 0) {
         if (--mIdleTimer == 0 && mListener) {
             mListener->onIdleTimeout();
@@ -220,6 +240,9 @@ void Model::onResume()
     mIsRunning = true;
     resetIdleTimer();
     requestSnapshot();   // the session may have moved on while suspended
+    if (!mHasSettings) {
+        requestSettings();   // the start-up SETTINGS / LOCAL_TIME may be lost (or still coming)
+    }
     if (mListener) {
         mListener->onResume();
     }
@@ -276,8 +299,9 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
         case CustomMessage::WORKOUT_ITEM: {
             auto* msg = static_cast<CustomMessage::WorkoutItem*>(message);
             if (msg->count == 0) {           // {0, 0, {}}: the list is empty
-                mUserCount      = 0;
-                mWorkoutsLoaded = true;
+                mUserCount       = 0;
+                mWorkoutsLoaded  = true;
+                mWorkoutsPending = false;
                 l->onWorkouts();
                 break;
             }
@@ -290,7 +314,8 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
                 mUserWorkouts[msg->index] = msg->workout;
             }
             if (msg->index + 1 == msg->count) {
-                mWorkoutsLoaded = true;
+                mWorkoutsLoaded  = true;
+                mWorkoutsPending = false;
                 l->onWorkouts();
             }
         } break;
@@ -307,15 +332,16 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
         } break;
 
         case CustomMessage::HISTORY: {
-            // Pages arrive newest first; offset 0 starts a fresh stream. A
-            // page that does not continue the rows held (lost or stale) is
-            // ignored, so the rows stay contiguous from the newest.
+            // One page per GET_HISTORY, newest first. Only the page asked for
+            // last counts: the current stream's seq at the next offset, so the
+            // rows stay contiguous from the newest. A full stream asks for the
+            // next page from here: one HISTORY in flight at a time.
             auto* msg = static_cast<CustomMessage::History*>(message);
-            if (msg->offset == 0) {
-                mHistoryTotal  = msg->total < score::kIndexCapacity ? msg->total : score::kIndexCapacity;
-                mHistoryLoaded = 0;
-            } else if (!mHasHistory || msg->offset != mHistoryLoaded) {
+            if (msg->seq != mHistorySeq || msg->offset != mHistoryLoaded) {
                 break;
+            }
+            if (msg->offset == 0) {
+                mHistoryTotal = msg->total < score::kIndexCapacity ? msg->total : score::kIndexCapacity;
             }
             uint8_t count = msg->count < score::kTrendCount ? msg->count : score::kTrendCount;
             if (count > mHistoryTotal - mHistoryLoaded) {
@@ -324,6 +350,9 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
             memcpy(&mHistory[mHistoryLoaded], msg->items, sizeof(score::SessionSummary) * count);
             mHistoryLoaded = static_cast<uint8_t>(mHistoryLoaded + count);
             mHasHistory    = true;
+            if (mHistoryAll && count > 0 && mHistoryLoaded < mHistoryTotal) {
+                SDK::send_msg<CustomMessage::GetHistory>(mKernel, mHistoryLoaded, mHistorySeq);
+            }
             l->onHistory();
         } break;
 
@@ -358,12 +387,15 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
             l->onSaved(static_cast<CustomMessage::Saved*>(message)->sessionId);
             break;
 
-        case CustomMessage::WORKOUT_SAVED:
-            // The service streams the whole list right after this: the one
-            // held is stale until it is in (onWorkouts()).
-            mWorkoutsLoaded = false;
-            l->onWorkoutSaved(static_cast<CustomMessage::WorkoutSaved*>(message)->workoutId);
-            break;
+        case CustomMessage::WORKOUT_SAVED: {
+            // A stored workout makes the list held stale: ask for it (the
+            // service sends the reply alone), onWorkouts() once it is in.
+            const uint8_t id = static_cast<CustomMessage::WorkoutSaved*>(message)->workoutId;
+            if (id != 0) {
+                requestWorkouts();
+            }
+            l->onWorkoutSaved(id);
+        } break;
 
         default:
             LOG_WARNING("unknown message 0x%04x\n", static_cast<unsigned>(message->getType()));

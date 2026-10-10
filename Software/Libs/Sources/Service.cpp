@@ -255,7 +255,6 @@ void Service::handleMessage(SDK::MessageBase* msg)
                 // would index past the spot table or never complete.
                 LOG_WARNING("SAVE_WORKOUT refused: steps out of range (id %u, %u steps)\n", w.id, w.stepCount);
                 SDK::send_msg<CustomMessage::WorkoutSaved>(mKernel, static_cast<uint8_t>(0));
-                sendWorkouts();
                 break;
             }
             const bool ok = (w.id == 0) ? mWorkouts.add(w, id) : mWorkouts.replace(w);
@@ -265,8 +264,9 @@ void Service::handleMessage(SDK::MessageBase* msg)
             } else {
                 mStorage.saveWorkouts(mWorkouts);
             }
+            // The reply only: WORKOUT_SAVED plus a 10-item list would overflow the
+            // GUI's 10-message queue, so the GUI asks for the list (GET_WORKOUTS).
             SDK::send_msg<CustomMessage::WorkoutSaved>(mKernel, id);
-            sendWorkouts();
         } break;
 
         case CustomMessage::DELETE_WORKOUT: {
@@ -284,8 +284,16 @@ void Service::handleMessage(SDK::MessageBase* msg)
             sendResults(static_cast<CustomMessage::GetResults*>(msg)->sessionId);
             break;
 
-        case CustomMessage::GET_HISTORY:
-            sendHistory();
+        case CustomMessage::GET_HISTORY: {
+            const auto* m = static_cast<CustomMessage::GetHistory*>(msg);
+            sendHistory(m->offset, m->seq);
+        } break;
+
+        case CustomMessage::GET_SETTINGS:
+            // The GUI lost (or never got) the start-up SETTINGS / LOCAL_TIME.
+            LOG_INFO("GET_SETTINGS: settings and local time sent again\n");
+            sendSettings();
+            sendLocalTime();
             break;
 
         case CustomMessage::GET_SPOT_STATS:
@@ -404,27 +412,24 @@ void Service::sendResults(uint32_t sessionId)
     m.send();
 }
 
-void Service::sendHistory()
+void Service::sendHistory(uint8_t offset, uint8_t seq)
 {
-    // Every row, newest first, in pages of kTrendCount; an empty index is one page {0, 0, 0}.
-    const uint8_t total = mIndex.count;
-    uint8_t offset = 0;
-    do {
-        auto m = SDK::make_msg<CustomMessage::History>(mKernel);
-        if (!m) {
-            LOG_WARNING("sendHistory: no message block, stopped at %u/%u rows\n", offset, total);
-            return;
-        }
-        m->total  = total;
-        m->offset = offset;
-        for (uint8_t i = 0; i < score::kTrendCount; ++i) {
-            const score::SessionSummary* row = mIndex.newest(static_cast<uint8_t>(offset + i));
-            if (!row) break;
-            m->items[m->count++] = *row;
-        }
-        m.send();
-        offset = static_cast<uint8_t>(offset + score::kTrendCount);
-    } while (offset < total);
+    // One page per GET_HISTORY (the GUI pulls the next): rows offset.. newest
+    // first, count 0 past the end ({0, 0, 0} for an empty index).
+    auto m = SDK::make_msg<CustomMessage::History>(mKernel);
+    if (!m) {
+        LOG_WARNING("sendHistory: no message block (offset %u, seq %u)\n", offset, seq);
+        return;
+    }
+    m->total  = mIndex.count;
+    m->offset = offset;
+    m->seq    = seq;
+    for (uint8_t i = 0; i < score::kTrendCount; ++i) {
+        const score::SessionSummary* row = mIndex.newest(static_cast<uint8_t>(offset + i));
+        if (!row) break;
+        m->items[m->count++] = *row;
+    }
+    m.send();
 }
 
 void Service::sendSpotStats()
@@ -455,8 +460,7 @@ void Service::clearHistory()
     } else {
         LOG_WARNING("history cleared in memory only: index not written, %u session files kept\n", n);
     }
-    sendHistory();
-    sendSpotStats();
+    sendSpotStats();   // the GUI asks for the (empty) history page itself
 }
 
 void Service::sendLocalTime()
@@ -522,7 +526,7 @@ void Service::finishSession(bool save)
     }
 
     // Order matters for a crash at any point: session file -> index row ->
-    // evicted file -> index file -> current.bin. current.bin goes last, so
+    // index file -> evicted file -> current.bin. current.bin goes last, so
     // until the session is safely stored a restart still resumes it (and
     // restoreCurrent() drops it once its id is in the saved index).
     if (!mStorage.saveSession(s)) {
@@ -545,14 +549,15 @@ void Service::finishSession(bool save)
         if (!mStorage.saveSessionCsv(s, ymd, name))
             LOG_WARNING("session %lu: CSV not written\n", static_cast<unsigned long>(s.id));
     }
-    if (evicted != 0) {
-        mStorage.removeSession(evicted);
-        if (mLoaded.id == evicted) mLoaded = score::Session{};
-    }
-    if (mStorage.saveIndex(mIndex))
+    if (evicted != 0 && mLoaded.id == evicted) mLoaded = score::Session{};
+    if (mStorage.saveIndex(mIndex)) {
+        // The evicted row's files only once no index on flash lists it (as in
+        // clearHistory()): a crash before this leaves an orphan, never a dead row.
+        if (evicted != 0) mStorage.removeSession(evicted);
         mStorage.clearCurrent();
-    else
+    } else {
         LOG_WARNING("index not written: current.bin kept for session %lu\n", static_cast<unsigned long>(s.id));
+    }
     mLastEndedId = s.id;
     haptic(HapticEvent::Saved);
     backlightOn();
