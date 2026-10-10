@@ -12,6 +12,11 @@ second entry (max 2 per person) — keep the scoring engine reusable.
 
 - Feature spec: `docs/feature-spec.md`; design spec: `docs/superpowers/specs/2026-10-10-hoops-mvp-design.md`;
   implementation plan (Tasks 1–15, all done): `docs/superpowers/plans/2026-10-10-hoops-mvp.md`.
+- v2 (settings, full history, CSV export, streaks, store assets; branch `v2`): design spec
+  `docs/superpowers/specs/2026-10-10-hoops-v2-design.md` (wins over the MVP spec where they differ),
+  plan (Tasks 1–14, all done) `docs/superpowers/plans/2026-10-10-hoops-v2.md`.
+- Store: listing text `docs/store/listing.md`, 16 previews `docs/store/previews/*.png` (480×480, from the
+  self-test), `store/app-manifest.json` + `store/icon.png`; app icons `Resources/icon_60x60.png`, `icon_30x30.png`.
 - Screen mockups (14 screens): `docs/mockups/*.dc.html`; measured layout per screen: `docs/mockup-layout.md`.
   The `.dc.html` files are design-canvas sources — they do not render standalone, but the markup holds the exact
   layout, colours, text and labels (the black 300×300 circle is the 240×240 screen at 1.25×). Rendered canvas:
@@ -22,34 +27,57 @@ second entry (max 2 per person) — keep the scoring engine reusable.
 Two processes, as every UNA app:
 
 - **Service** (`Software/Libs/Sources/Service.cpp`, `Storage.cpp`): owns the session engine, all
-  statistics, storage, haptics (vibro + backlight), heart rate and wrist-raise sensors. One `onSecond()` per
-  wall-clock second drives timers; `current.bin` is saved after every input and every 5 running seconds.
-- **GUI** (`Software/Apps/LVGL-GUI/gui/`): `Model` (latest copy of what the service sent + navigation memory),
-  `ScreenManager`, `Theme`, widgets (`ListMenu`, `Ring`, `Court`, `Hints`, `KeyInput`) and one class per
-  screen. It computes no statistics and touches no files.
+  statistics, storage, settings (`settings.bin`, applied to haptics, backlight and HR), haptics (vibro +
+  backlight), heart rate and wrist-raise sensors. One `onSecond()` per wall-clock second drives timers;
+  `current.bin` is saved after every input and every 5 running seconds. Once a minute while the GUI runs it
+  re-sends LOCAL_TIME if the local date changed.
+- **GUI** (`Software/Apps/LVGL-GUI/gui/`): `Model` (latest copy of what the service sent — snapshot, settings,
+  paged history, spot records — + navigation memory), `ScreenManager`, `Theme` (runtime palette, dark/light),
+  widgets (`ListMenu`, `Ring`, `Court`, `Hints`, `KeyInput`, `Toast`) and one class per screen. It computes no
+  statistics and touches no files.
 - **Engine** (`Software/Libs/score/`): plain C++17, no SDK/GUI dependencies, unit-tested on the host —
   `Spots`, `Session` (≤ 400 shots), `Workout` (+ 5 presets, ≤ 8 steps, ≤ 10 user workouts), `SessionEngine`
-  (open/workout sessions, rest, undo, pause, crash `restore()`, `Snapshot`), `Stats`, `History`
-  (`SessionIndex`, 50 rows, trend of 5), `Serializer`.
+  (open/workout sessions, rest, undo, pause, crash `restore()`, `currentStreak()` (trailing makes, capped at
+  255), `Snapshot` incl. `streak`), `Stats`, `History` (`SessionIndex`, 50 rows, trend of 5, per-spot
+  `last[13]`/`best[13]` records via `recordSpots()`), `Settings` (defaults, `valid()`), `Serializer`.
 - **IPC** (`Software/Libs/Header/Commands.hpp`): padding-free POD messages. `0x01xx` GUI → Service
-  (START_OPEN … GET_HISTORY), `0x02xx` Service → GUI (SNAPSHOT, UNDO_RESULT, STEP_DONE, WORKOUT_ITEM, RESULTS,
-  HISTORY, LOCAL_TIME, SAVED, WORKOUT_SAVED). A RESULTS reply with `sessionId 0` means "none"; `GET_RESULTS{0}`
-  = the session just ended.
-- **Storage** (app directory; simulator: `Software/Output/`). Every file = 12-byte header {magic, size,
+  (START_OPEN 0x0101 … GET_HISTORY 0x0110, SET_SETTINGS 0x0111, GET_SPOT_STATS 0x0112, CLEAR_HISTORY 0x0113),
+  `0x02xx` Service → GUI (SNAPSHOT, UNDO_RESULT, STEP_DONE, WORKOUT_ITEM, RESULTS, HISTORY, LOCAL_TIME, SAVED,
+  WORKOUT_SAVED 0x0209, SETTINGS 0x020A, SPOT_STATS 0x020B). A RESULTS reply with `sessionId 0` means "none";
+  `GET_RESULTS{0}` = the session just ended. HISTORY is paged `{total, offset, count, pad, items[5]}`: one
+  GET_HISTORY streams every indexed row newest first, ⌈total/5⌉ messages (one `{0,0,0}` page when empty; a
+  missing message block stops the stream and the GUI keeps what it has). SETTINGS (`score::Settings`) goes out
+  on GUI start before LOCAL_TIME and the first snapshot, and after every SET_SETTINGS (an invalid one is
+  ignored and answered with the settings in force). SPOT_STATS = `SpotStat last[13], best[13]`. CLEAR_HISTORY
+  writes the empty index first, then removes the indexed `.bin`/`.csv` files, then sends HISTORY + SPOT_STATS.
+- **Storage** (app directory; simulator: `Software/Output/`). Every `.bin` file = 12-byte header {magic, size,
   FNV-1a checksum} + the raw POD:
-  - `workouts.bin` ('HWK1', `WorkoutStore`) and `sessions/index.bin` ('HIX1', `SessionIndex`): written as
-    `<path>.tmp` then renamed over the target; a lone `.tmp` is recovered on load.
+  - `workouts.bin` ('HWK1', `WorkoutStore`), `settings.bin` ('HST1', `score::Settings`, 12 B; missing or
+    invalid = defaults, written only when the user changes a setting) and `sessions/index.bin` ('HIX2',
+    `SessionIndex` + the per-spot records; an old 'HIX1' file fails to decode → empty index, its session files
+    stay on disk unindexed): written as `<path>.tmp` then renamed over the target; a lone `.tmp` is recovered
+    on load.
   - `current.bin` ('HSS1', `Session`): the running session, for crash resume (restored → Paused, `kResumable`);
-    written atomically like the others. End & save: session file → index row → evicted file → index →
-    remove current.bin, so a crash at any point loses nothing (a current.bin whose id is already indexed is
+    written atomically like the others. End & save: session file → index row + spot records (in memory) → CSV
+    → evicted files → index → remove current.bin, so a crash at any point loses nothing (a current.bin whose id is already indexed is
     dropped on start). A restored workout session whose step no longer fits the (edited) workout continues
     as an open session.
   - `sessions/<id>.bin` ('HSS1'): one per saved session; evicted with its index row (oldest beyond 50).
+  - `sessions/<id>.csv` (plain text, no header block; only with the CSV export setting on): written on End &
+    save after the session file and the in-memory index row, before `index.bin` (a crash between leaves at worst
+    an orphan CSV). Header `session_id,date,workout,shot,spot,category,made,t_s`, one row per shot, e.g.
+    `1791651056,2026-10-10,Game Shots,1,3PT · Top,3PT,1,12` (`workout` = preset/user name or `Open`, a `,` in
+    it becomes a space; `spot` keeps the UTF-8 middle dot; `t_s` = seconds since the session start). Lines are
+    buffered in `Storage::mBuf` (≈ 10 writes for 400 shots); a failed write logs a WARNING and removes the torn
+    file, the session is still indexed. Removed with its session (eviction, Clear history). On the watch:
+    `Apps/Hoops/sessions/` over USB mass storage. Nothing reads CSVs back.
 - **Screens** (`ScreenId` order): Home, SpotPicker, Workouts, WorkoutPreview, StepBuilder, Active (open and
-  workout mode, undo toast), Rest (also the workout-done summary), Pause, Results (4 pages: court, categories,
-  highlights, trend), History.
-- LVGL pool `LV_MEM_SIZE` 56 KB (both CMake files): peak ≈ 23 KB (Free Throw 50 → Pause switch). RAM: GUI
-  data+bss ≈ 156 KB of 600 KB, service ≈ 19 KB of 500 KB.
+  workout mode, undo / streak / target toasts), Rest (also the workout-done summary), Pause, Results (4 pages:
+  court, categories, highlights, trend), History (every indexed session, up to 50, rows appear as pages
+  arrive), Settings.
+- LVGL pool `LV_MEM_SIZE` 56 KB (both CMake files): peak 23 752 B ≈ 23.2 KB in the full self-test walk
+  (SpotPicker → Active change-spot switch). RAM (`arm-none-eabi-size`): GUI data+bss 161 980 B ≈ 158 KB of
+  600 KB, service 20 032 B ≈ 20 KB of 500 KB; `Hoops_0.0.0-dev.uapp` 307 872 B.
 
 ## Environment
 
@@ -67,7 +95,7 @@ All paths from the repo root.
 ```bash
 # Host unit tests (engine only; fetches googletest on first configure)
 cmake -S Tests/Host -B build-host -DCMAKE_BUILD_TYPE=Debug
-cmake --build build-host && ctest --test-dir build-host --output-on-failure      # 66 tests
+cmake --build build-host && ctest --test-dir build-host --output-on-failure      # 89 tests
 
 # Simulator (needs libsdl2-dev; run from build/bin — the mock file system is ../../../../../Output = Software/Output)
 cd Software/Apps/LVGL-GUI/simulator
@@ -78,7 +106,7 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COM
 # Watch app (.uapp) — the SDK's copy into Output/ can fail; copy build/*.uapp by hand if so
 cd Software/Apps/Hoops-CMake
 cmake -S . -B build -DUNA_PYTHON_EXECUTABLE=$PWD/../../../.venv/bin/python3 && cmake --build build -j
-# -> build/Hoops_<version>.uapp; version comes from git tags. RAM check:
+# -> build/Hoops_<version>.uapp; version from an apps-v<X.Y.Z> git tag (see Publish; untagged 0.0.0-dev). RAM check:
 arm-none-eabi-size build/HoopsGUI.elf build/HoopsService.elf
 ```
 
@@ -113,10 +141,26 @@ have no middle dot: `Theme::setText` renders " · " as " - " (tests match the dr
 Vibration/buzzer/backlight appear only as `Mock.Vibro::play` / `Mock.Buzzer::play` / `Mock.Backlight::on` log
 lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/ConfigurationSimulator.hpp`.
 
+**Store assets** (from the repo root; outputs are committed):
+
+```bash
+.venv/bin/python3 tools/make_icons.py      # Resources/icon_60x60.png, icon_30x30.png, store/icon.png (deterministic)
+tools/package_store.sh --allow-placeholder # test package with the placeholder App ID
+tools/package_store.sh                     # refuses while APP_ID is the placeholder 13F039C6FE024E86
+# -> dist/Hoops-<ver>.zip = Hoops_<ver>.uapp + icon.png + app-manifest.json + previews/*.png (dist/ is git-ignored)
+```
+
+The previews come from the self-test's `HOOPS_SHOTS_DIR` walk + `tools/ppm2png.py` (above); a re-run differs
+only in the simulated heart rate, so regenerate them only when a screen changed.
+
 **Deploy to watch:** USB mass storage → create `Apps/Hoops/` → copy `.uapp` → eject → reboot watch.
-**Publish:** apps.unawatch.com → Add New → copy App ID into `APP_ID` in `Software/Apps/Hoops-CMake/CMakeLists.txt`
-→ rebuild → `app-manifest.json` + `python3 $UNA_SDK/Utilities/Scripts/app_packer/min_kernel_version.py --stamp app-manifest.json`
-→ zip `.uapp` + `icon.png` + manifest → Version → Upload New → Release.
+**Publish:** apps.unawatch.com → Add New → copy the App ID into `APP_ID` in
+`Software/Apps/Hoops-CMake/CMakeLists.txt` **and** `"id"` in `store/app-manifest.json` (the script checks they
+match) → commit, then tag HEAD `apps-v<X.Y.Z>` (the SDK's `una-version.sh` matches only `apps-v*` tags: an
+exact tag gives `X.Y.Z`, commits after it `X.Y.Z-<n>-<hash>`, no tag `0.0.0-dev`; the script copies that string
+into `appVersion` unchanged) →
+`tools/package_store.sh` (builds, fills `binary`/`appVersion`, runs the SDK's `min_kernel_version.py --stamp`
+and `--check`, zips) → upload `dist/Hoops-<ver>.zip` → Version → Upload New → Release.
 
 ## Hardware & SDK facts (SDK v1.6.0-rc1 (checkout at ~/una-sdk); online docs are v1.5.0)
 
@@ -143,7 +187,29 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
 - Shooting: **SELECT = MAKE** (1 buzz), **BACK = MISS** (2 buzzes), **UP = undo** (3 buzzes + 2 s toast
   "Make removed" / "Miss removed" / "Nothing to undo"), **DOWN = pause**, **hold DOWN (500 ms) = change spot**
   (open session; toast "Release to change spot" while held, picker opens on release; in a workout a hold pauses).
-  Every shot / undo / step end / skip / save turns the backlight on; menu navigation does not.
+  Setting Hold DOWN = Pause: no hold toast, the HoldRelease of DOWN pauses like a click (open sessions too).
+  Shot and undo turn the backlight on only with "Backlight on shot" (default On); step end / rest over / skip /
+  target reached / save / wrist raise (during a session) always do; menu navigation does not.
+- Haptics (service `haptic(HapticEvent)`, table `kHaptics` in `Service.cpp`; setting Haptics, default Strong):
+
+  | event | Strong | Light |
+  |---|---|---|
+  | make | SHARP_CLICK_100 | SHARP_TICK_1_100 |
+  | miss | SHORT_DOUBLE_CLICK_STRONG_1_100 | SHORT_DOUBLE_SHARP_TICK_1_100 |
+  | undo | 3× SHARP_TICK_1_100 | 3× SHARP_TICK_1_100 |
+  | step done / rest over / skip / target reached (Alert) | ALERT_750MS_100 | ALERT_750MS_100 |
+  | saved | STRONG_CLICK_100 | MEDIUM_CLICK_1_100 |
+  | streak 5 | DOUBLE_CLICK_100 | SHORT_DOUBLE_SHARP_TICK_1_100 |
+  | streak 10, 20, 30 … | 3× STRONG_CLICK_100 | 3× MEDIUM_CLICK_1_100 |
+
+  Off = no vibration at all. **One haptic per shot**: when a shot ends a step / the workout or reaches the open
+  target, the Alert replaces the make/miss/streak haptic. Streak = trailing makes (`currentStreak()`, undo
+  recomputes it); a made shot at streak 5 plays streak 5 instead of make, at 10, 20, 30 … streak 10.
+- Streak toast: Active shows "N in a row!" (2 s) when a live snapshot's `streak` rises to 5 or a multiple of 10;
+  a toast already showing (undo, hold hint, step done) stays.
+- Open target (setting Off / 25 / 50 / 100 / 200 shots; open sessions only): Active's ring shows session
+  attempts / target, coloured by the session percentage, instead of the spot percentage; the shot that reaches
+  it plays the Alert + backlight once and Active shows "Target reached" (2 s).
 - No exit mid-session: leaving only via Pause (Resume / End & save / Discard; Discard asks twice within 3 s;
   BACK = resume). BACK on Home during a session goes to Pause.
 - Crash resume: a restored session is Paused; Home shows "Resume session" first (selected) and an amber
@@ -158,12 +224,46 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
   toast instead. After the last step Rest shows the workout-done summary (UP keep shooting = extra shots).
 - Step builder: fields Spot / Goal type / Value / Rest; SELECT on Spot opens the full spot picker; after Rest a
   mini-menu Add step / Save workout / Next step / Delete step / Delete workout (asked twice). Saves time out
-  after 3 s with "No reply".
+  after 3 s with "No reply". A new workout's first step starts from the Settings default step (goal type, value,
+  rest); "Add step" copies the current step. The value lists are shared with Settings (`StepValues.hpp`).
+- Spot picker footer: "Last 40 % · best 46 %" from the index's per-spot records (GET_SPOT_STATS on show); just
+  "Last 40 %" without a best (best needs ≥ `kMinAttemptsForRank` = 5 attempts at the spot in one session);
+  hidden for a spot never shot.
+- Settings (Home's Settings row → `ScreenId::Settings`; header "SETTINGS"; two-line list, the selected row shows
+  its value; UP/DOWN move, **SELECT = next value** (cycles, wraps; sent at once as SET_SETTINGS), BACK = Home).
+  Rows: Goal type (Attempts · Makes · Time) · Goal value (5–50 "10 shots" / "10 makes", Time 30–180 "60 s"; a
+  type change snaps the value) · Rest (0 / 15 / 30 / 60 s) · Open target (Off · 25 / 50 / 100 / 200 shots) ·
+  Hold DOWN (Change spot · Pause) · Haptics (Off · Light · Strong) · Backlight on shot (On · Off) · Heart rate
+  (On · Off; off = the HR sensor is never connected) · Colour scheme (Dark · Light) · CSV export (On · Off) ·
+  Clear history ("N sessions" / "1 session", "Nothing to clear", "Loading…" before the first HISTORY page;
+  first SELECT → "SELECT again to confirm" for 3 s, second SELECT → CLEAR_HISTORY, toast "History cleared",
+  "0 sessions") · About ("Hoops v<BUILD_VERSION>", simulator "Hoops dev").
 - Results via SELECT: 1 court map (UP/DOWN move between spots; caption "3PT · Top 5/10 · 50 %") → 2 categories
   → 3 highlights (STREAK names the spot) → 4 trend. BACK = done (already saved).
 - Heart rate is counted in Active and Rest, not while paused: the HR sensor is disconnected on PAUSE (and for a
-  restored session until it is resumed) and reconnected on RESUME.
-- Colours: green ≥ 50 %, amber 35–49 %, red < 35 %, teal accent `#00AAAA`, black background; 64-colour palette.
+  restored session until it is resumed) and reconnected on RESUME. With the Heart rate setting off it is never
+  connected (switching it on during an Active/Rest session connects it at once).
+- Colours: green ≥ 50 %, amber 35–49 %, red < 35 %, teal accent `#00AAAA`, black background (Dark scheme); 64-colour palette.
+  `Theme::kText` … `kBg` are runtime variables rewritten by `Theme::setScheme()` (read them at build/draw time):
+
+  | token | Dark (default) | Light |
+  |---|---|---|
+  | kBg | BLACK | WHITE |
+  | kText | WHITE | BLACK |
+  | kDim | GRAY | GRAY_DARK |
+  | kLine | GRAY_DARK | GRAY |
+  | kAccent | TEAL | TEAL |
+  | kGood | GREEN | GREEN_MID |
+  | kBad | RED | RED |
+  | kAmber | YELLOW_DARK | ORANGE_DARK |
+
+  On a SETTINGS whose scheme differs from the Theme's, the Model calls `setScheme()` and `ScreenManager::rebuild()`
+  rebuilds the current screen; the GUI starts Dark, so a Light user sees one dark frame before SETTINGS arrives.
+- Idle timeout (60 s without a key, `kIdleTimeoutTicks`): exits the app from every screen while no session is
+  running, except StepBuilder and the spot picker opened for a step's spot (an unsaved draft); Active / Rest /
+  Pause never exit on idle.
+- Date: the service re-checks the local date once a minute while the GUI runs and re-sends LOCAL_TIME when it
+  changed; screens read it when they (re)build.
 - Spots (13): 3PT L-Corner, L-Wing, Top, R-Wing, R-Corner · Mid L-Baseline, L-Elbow, Top-Key, R-Elbow,
   R-Baseline · FT · Layup L, R.
 - Presets: Around the World, Free Throw 50, Mikan Layups, Mid-range Ladder, Game Shots (3PT/Mid/FT/Layup ×10).
@@ -185,10 +285,25 @@ backlight), all 10 screens with presets, custom workouts, results, history and t
 crash-resume 5/5 headless; `Hoops_0.0.0-dev.uapp` builds. Final review fixes (2026-10-10): self-test 90/90,
 crash-resume 9/9, 66 host tests.
 
+v2 complete (2026-10-10, branch `v2`, Tasks 1–14): Settings screen + `settings.bin`, haptics levels, open
+target, hold-DOWN option, light scheme, full paged history, spot last/best records ('HIX2'), CSV export, clear
+history, streak haptics + toast, date refresh, idle timeout on every menu screen, icons, store previews,
+listing, manifest and packaging script. Verified (2026-10-11): 89 host tests; self-test 117/117 and
+crash-resume 9/9 headless; LVGL pool peak 23 752 B; GUI data+bss 161 980 B, service 20 032 B;
+`Hoops_0.0.0-dev.uapp` 307 872 B; `tools/package_store.sh --allow-placeholder` packs `dist/Hoops-0.0.0-dev.zip`.
+
 Known limitations / next:
-- HISTORY carries 5 rows (`kTrendCount`); the index keeps 50 — the History screen shows only the newest 5.
-- Idle timeout (60 s, exits the app) only on Home and only without a session in progress.
-- The date (LOCAL_TIME) is sent once at GUI start; a GUI left open past midnight shows yesterday's "today".
+- A Light-scheme user sees one dark frame at GUI start (the GUI starts Dark until SETTINGS arrives, ~100 ms).
+- An MVP 'HIX1' index is not migrated: it fails to decode, the service starts with an empty history and the
+  old `sessions/<id>.bin` files stay on disk unindexed (Clear history removes indexed files only).
+- CSVs are export-only: nothing reads them back; turning CSV export on does not create CSVs for older sessions.
+- One GET_HISTORY streams up to 10 HISTORY messages (50 rows / 5) back to back; fine in the simulator, untested
+  against the watch's message pool (a missing block stops the stream; the GUI shows the rows it got).
+- `appVersion` in the store manifest is the `.uapp` version verbatim, git suffix included (`0.0.0-dev`,
+  `X.Y.Z-<n>-<hash>`): package from a commit tagged `apps-vX.Y.Z`.
+- The streak is capped at 255 (`uint8_t`), so the streak-10 haptic and toast stop after 250 in a row.
+- In a workout the streak toast can be replaced by the step-done toast (zero-rest step) on the same shot, and
+  the step's Alert replaces the streak haptic (one haptic per shot).
 - Hold = 500 ms (`KeyInput::kHoldMs`) with HoldRelease semantics (see Hardware facts). A CLICK of a button
   within 250 ms (`kLateClickMs`) of that button's HoldRelease, with no PRESS in between, is dropped by every
   screen's KeyInput (it is the late echo of a press that already acted, possibly navigating); a CLICK later than
@@ -199,8 +314,12 @@ Known limitations / next:
   toast "Not saved". "Delete workout" is greyed while a session runs that workout.
 
 Next:
-1. Real App ID from apps.unawatch.com (`13F039C6FE024E86` is a local placeholder) and app icons in `Resources/`
-   (currently the tutorial's).
-2. Try it on the watch: button feel, backlight timeout, HR, flash write times (atomic rename path).
-3. Settings screen (greyed on Home), FIT export, IMU "smart attempts".
-4. Store listing + submission by **30 Oct 2026, 16:00 UK**.
+1. Hardware pass on the watch: button feel and CLICK/RELEASE timing, haptic levels, backlight timeout, HR,
+   flash write times (atomic rename path, CSV), HISTORY streaming against the message pool, Light scheme on the
+   MIP display.
+2. Originality feature (e.g. Pressure FT / ghost pace against a previous session).
+3. Real App ID from apps.unawatch.com (`13F039C6FE024E86` is a local placeholder) in **both**
+   `APP_ID` (`Software/Apps/Hoops-CMake/CMakeLists.txt`) and `"id"` in `store/app-manifest.json`.
+4. Tag `apps-vX.Y.Z`, `tools/package_store.sh`, upload, release and submit via the form by
+   **30 Oct 2026, 16:00 UK**.
+5. Later: FIT export, IMU "smart attempts", table-tennis entry on the same engine.

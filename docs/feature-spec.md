@@ -1,6 +1,6 @@
 # ScoreTrack – Feature Spec (Basketball Shooting + Table Tennis)
 
-Status: draft v0.1 · 2026-10-09 · Target: UNA App Competition (deadline **30 Oct 2026, 16:00 UK**)
+Status: v0.1 (2026-10-09) · basketball MVP built 2026-10-10, v2 (settings, full history, CSV export, streaks, store assets) built 2026-10-10 — as-built reference: CLAUDE.md · Target: UNA App Competition (deadline **30 Oct 2026, 16:00 UK**)
 
 > Button names: L1 = UP (top-left), L2 = DOWN (bottom-left), R1 = SELECT (top-right), R2 = BACK (bottom-right).
 > Where this spec and the mockups (`docs/mockups`) differ, the mockups and CLAUDE.md "Decided UX" win.
