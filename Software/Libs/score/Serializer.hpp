@@ -20,6 +20,7 @@ static_assert(sizeof(Header) == 12, "Header must stay 12 bytes");
 constexpr uint32_t kMagicSession  = 0x31535348u;  // 'HSS1'
 constexpr uint32_t kMagicIndex    = 0x31584948u;  // 'HIX1'
 constexpr uint32_t kMagicWorkouts = 0x314B5748u;  // 'HWK1'
+constexpr uint32_t kMagicSettings = 0x31545348u;  // 'HST1'
 
 /// FNV-1a 32-bit.
 uint32_t checksum(const void* data, size_t len);
