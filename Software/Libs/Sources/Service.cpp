@@ -46,6 +46,7 @@ void Service::run()
             switch (msg->getType()) {
                 case SDK::MessageType::COMMAND_APP_STOP:
                     LOG_INFO("Force exit from the application\n");
+                    autosave();   // the running session as of now, not of the last 5 s tick
                     mSensorHr.disconnect();
                     mSensorWrist.disconnect();
                     // We must release message because this is the last event.
@@ -100,8 +101,12 @@ void Service::handleMessage(SDK::MessageBase* msg)
             if (mEngine.startOpen(static_cast<score::Spot>(m->spot), nowUnix())) {
                 autosave();
                 connectHr();
-            } else
+            } else if (mEngine.isActive()) {
+                // The GUI should not ask while a session runs; the snapshot tells it so.
+                LOG_INFO("START_OPEN refused: a session is running\n");
+            } else {
                 LOG_WARNING("START_OPEN refused (spot %u)\n", m->spot);
+            }
             pushSnapshot();
         } break;
 
@@ -112,8 +117,11 @@ void Service::handleMessage(SDK::MessageBase* msg)
             if (w && mEngine.startWorkout(*w, nowUnix())) {
                 autosave();
                 connectHr();
-            } else
+            } else if (mEngine.isActive()) {
+                LOG_INFO("START_WORKOUT refused: a session is running\n");
+            } else {
                 LOG_WARNING("START_WORKOUT refused (id %u)\n", id);
+            }
             pushSnapshot();
         } break;
 
@@ -143,12 +151,15 @@ void Service::handleMessage(SDK::MessageBase* msg)
         } break;
 
         case CustomMessage::PAUSE:
-            if (mEngine.pause()) autosave();   // ticks don't save while paused
+            if (mEngine.pause()) {
+                autosave();                // ticks don't save while paused
+                mSensorHr.disconnect();    // a paused session counts no heart rate
+            }
             pushSnapshot();
             break;
 
         case CustomMessage::RESUME:
-            mEngine.resume();
+            if (mEngine.resume()) connectHr();
             pushSnapshot();
             break;
 
@@ -184,8 +195,17 @@ void Service::handleMessage(SDK::MessageBase* msg)
             break;
 
         case CustomMessage::SAVE_WORKOUT: {
-            const score::Workout& w = static_cast<CustomMessage::SaveWorkout*>(msg)->workout;
+            score::Workout w = static_cast<CustomMessage::SaveWorkout*>(msg)->workout;
+            w.name[score::kNameLen - 1] = '\0';   // NUL-terminated whatever the GUI sent
             uint8_t id = w.id;
+            if (!w.validSteps()) {
+                // Stored as sent and later run by the engine: out-of-range steps
+                // would index past the spot table or never complete.
+                LOG_WARNING("SAVE_WORKOUT refused: steps out of range (id %u, %u steps)\n", w.id, w.stepCount);
+                SDK::send_msg<CustomMessage::WorkoutSaved>(mKernel, static_cast<uint8_t>(0));
+                sendWorkouts();
+                break;
+            }
             const bool ok = (w.id == 0) ? mWorkouts.add(w, id) : mWorkouts.replace(w);
             if (!ok) {
                 LOG_WARNING("SAVE_WORKOUT refused (id %u)\n", w.id);
@@ -353,28 +373,49 @@ void Service::finishSession(bool save)
     }
     const score::Session& s = mEngine.end();
     mSensorHr.disconnect();
-    mStorage.clearCurrent();
     mSaveTicks = 0;
-    if (save) {
-        mLastEndedId = s.id;
-        if (mStorage.saveSession(s)) {
-            // Only a session whose file exists gets a row: History must not list what Results can't load.
-            const uint32_t evicted = mIndex.push(score::summarize(s, todayYmd()));
-            if (evicted != 0) {
-                mStorage.removeSession(evicted);
-                if (mLoaded.id == evicted) mLoaded = score::Session{};
-            }
-            mStorage.saveIndex(mIndex);
-        } else {
-            LOG_WARNING("session %lu: file not written, not indexed\n", static_cast<unsigned long>(s.id));
-        }
-        vibro(Effect::STRONG_CLICK_100);
-        backlightOn();
-        SDK::send_msg<CustomMessage::Saved>(mKernel, s.id);
-        LOG_INFO("session %lu ended: %u shots\n", static_cast<unsigned long>(s.id), s.count);
-    } else {
-        LOG_INFO("session %lu discarded\n", static_cast<unsigned long>(s.id));
+    if (save && s.count == 0) {
+        // Nothing to keep: dropped like a discard; SAVED{0} sends the GUI Home.
+        LOG_INFO("session %lu ended empty, not saved\n", static_cast<unsigned long>(s.id));
+        mStorage.clearCurrent();
+        SDK::send_msg<CustomMessage::Saved>(mKernel, static_cast<uint32_t>(0));
+        pushSnapshot();
+        return;
     }
+    if (!save) {
+        mStorage.clearCurrent();
+        LOG_INFO("session %lu discarded\n", static_cast<unsigned long>(s.id));
+        pushSnapshot();
+        return;
+    }
+
+    // Order matters for a crash at any point: session file -> index row ->
+    // evicted file -> index file -> current.bin. current.bin goes last, so
+    // until the session is safely stored a restart still resumes it (and
+    // restoreCurrent() drops it once its id is in the saved index).
+    if (!mStorage.saveSession(s)) {
+        // No row (History must not list what Results can't load), no "saved"
+        // buzz; current.bin stays, so the session comes back on the next start
+        // (unless a new session overwrites it first).
+        LOG_WARNING("session %lu: file not written, not indexed\n", static_cast<unsigned long>(s.id));
+        SDK::send_msg<CustomMessage::Saved>(mKernel, static_cast<uint32_t>(0));   // 0 = save failed
+        pushSnapshot();
+        return;
+    }
+    const uint32_t evicted = mIndex.push(score::summarize(s, todayYmd()));
+    if (evicted != 0) {
+        mStorage.removeSession(evicted);
+        if (mLoaded.id == evicted) mLoaded = score::Session{};
+    }
+    if (mStorage.saveIndex(mIndex))
+        mStorage.clearCurrent();
+    else
+        LOG_WARNING("index not written: current.bin kept for session %lu\n", static_cast<unsigned long>(s.id));
+    mLastEndedId = s.id;
+    vibro(Effect::STRONG_CLICK_100);
+    backlightOn();
+    SDK::send_msg<CustomMessage::Saved>(mKernel, s.id);
+    LOG_INFO("session %lu ended: %u shots\n", static_cast<unsigned long>(s.id), s.count);
     pushSnapshot();
 }
 
@@ -427,6 +468,15 @@ void Service::restoreCurrent()
         mStorage.clearCurrent();   // drops a corrupt file; no-op when absent
         return;
     }
+    if (mIndex.find(mLoaded.id)) {
+        // Saved already: the crash came after the index was written but
+        // before current.bin was removed (finishSession()).
+        LOG_INFO("current.bin: session %lu is in the index already, deleting\n",
+                 static_cast<unsigned long>(mLoaded.id));
+        mStorage.clearCurrent();
+        mLoaded = score::Session{};
+        return;
+    }
     const uint16_t wid = mLoaded.workoutId;
     const score::Workout* w = nullptr;
     if (wid != 0 && wid <= UINT8_MAX) {
@@ -437,7 +487,7 @@ void Service::restoreCurrent()
         LOG_INFO("session %lu restored (%u shots, workout %u%s)\n", static_cast<unsigned long>(mLoaded.id),
                  mLoaded.count, wid, (wid != 0 && !w) ? " gone, continuing open" : "");
         autosave();   // persist the Paused state (and any open-session fallback)
-        connectHr();
+        // No heart rate until it is resumed (RESUME connects it).
     } else {
         LOG_WARNING("current.bin rejected by restore, deleting\n");
         mStorage.clearCurrent();

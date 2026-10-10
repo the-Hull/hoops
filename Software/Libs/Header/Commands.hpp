@@ -208,7 +208,7 @@ struct LocalTime : public SDK::MessageBase {
 };
 
 struct Saved : public SDK::MessageBase {
-    uint32_t sessionId;
+    uint32_t sessionId;   ///< 0 = nothing stored (the session was empty, or the save failed)
     explicit Saved(uint32_t id = 0) : SDK::MessageBase(SAVED), sessionId(id) {}
 };
 

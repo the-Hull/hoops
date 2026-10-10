@@ -39,7 +39,7 @@ struct SessionIndex {
     uint8_t        pad[3];
     SessionSummary items[kIndexCapacity];   ///< oldest first
 
-    uint32_t push(const SessionSummary& s);            ///< returns evicted id or 0
+    uint32_t push(const SessionSummary& s);            ///< returns evicted id or 0; same id replaces its row
     const SessionSummary* find(uint32_t id) const;
     const SessionSummary* newest(uint8_t back) const;  ///< back 0 = newest, nullptr past the start
     bool remove(uint32_t id);
@@ -58,7 +58,7 @@ struct WorkoutStore {
     bool remove(uint8_t id);
     const Workout* find(uint8_t id) const;
     uint8_t nextCustomNumber() const;      ///< count + 1, for "Custom N"
-    bool valid() const;   ///< count, ids and stepCounts in range (check after load)
+    bool valid() const;   ///< count, ids and steps (Workout::validSteps) in range (check after load)
 };
 static_assert(std::is_trivially_copyable<WorkoutStore>::value, "WorkoutStore is memcpy'd to flash");
 static_assert(std::has_unique_object_representations<WorkoutStore>::value, "WorkoutStore: no padding");

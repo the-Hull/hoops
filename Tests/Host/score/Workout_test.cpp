@@ -14,6 +14,7 @@ TEST(Workout, PresetsAreWellFormed) {
             EXPECT_GT(w.steps[s].goal.value, 0);
         }
         EXPECT_EQ(findPreset(w.id), &w);
+        EXPECT_TRUE(w.validSteps());
     }
     EXPECT_EQ(findPreset(0), nullptr);
     EXPECT_EQ(findPreset(99), nullptr);
@@ -34,4 +35,21 @@ TEST(Workout, TotalsAndEstimate) {
     Workout t{}; t.stepCount = 1; t.steps[0] = { 0, 0, { static_cast<uint8_t>(GoalType::Time), 0, 60 } };
     EXPECT_EQ(t.totalShots(), 0);
     EXPECT_EQ(t.estimateSeconds(), 60u);
+}
+TEST(Workout, ValidSteps) {
+    Workout w{};
+    EXPECT_FALSE(w.validSteps());   // no steps
+    w.stepCount = 2;
+    w.steps[0] = { static_cast<uint8_t>(Spot::Ft), 0, { static_cast<uint8_t>(GoalType::Attempts), 0, 10 } };
+    w.steps[1] = { static_cast<uint8_t>(Spot::Top3), 255, { static_cast<uint8_t>(GoalType::Time), 0, 60 } };
+    EXPECT_TRUE(w.validSteps());
+    w.steps[2].spot = 0xEE;          // unused steps are not looked at
+    EXPECT_TRUE(w.validSteps());
+    w.steps[1].spot = kSpotCount;                                       EXPECT_FALSE(w.validSteps());
+    w.steps[1].spot = kSpotCount - 1;                                   EXPECT_TRUE(w.validSteps());
+    w.steps[1].goal.type = static_cast<uint8_t>(GoalType::Time) + 1;    EXPECT_FALSE(w.validSteps());
+    w.steps[1].goal.type = static_cast<uint8_t>(GoalType::Makes);       EXPECT_TRUE(w.validSteps());
+    w.steps[0].goal.value = 0;                                          EXPECT_FALSE(w.validSteps());
+    w.steps[0].goal.value = 1;                                          EXPECT_TRUE(w.validSteps());
+    w.stepCount = kMaxSteps + 1;                                        EXPECT_FALSE(w.validSteps());
 }

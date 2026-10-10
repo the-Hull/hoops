@@ -36,7 +36,9 @@ bool SessionEngine::restore(const Session& saved, const Workout* w)
     if (s != SessionState::Active && s != SessionState::Paused && s != SessionState::Rest) return false;
     // Reject records that would index outside the shot log or step list.
     if (saved.count > kMaxShots || saved.stepStartCount > saved.count) return false;
-    if (w && (w->stepCount == 0 || w->stepCount > kMaxSteps || saved.stepIndex >= w->stepCount)) return false;
+    // A workout that no longer fits the record (edited meanwhile, fewer
+    // steps): continue as an open session rather than lose the shots.
+    if (w && (w->stepCount == 0 || w->stepCount > kMaxSteps || saved.stepIndex >= w->stepCount)) w = nullptr;
 
     SessionState from = (s == SessionState::Paused) ? static_cast<SessionState>(saved.pausedFrom) : s;
     if (from != SessionState::Active && from != SessionState::Rest) from = SessionState::Active;

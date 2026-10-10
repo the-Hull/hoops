@@ -43,17 +43,23 @@ bool Storage::saveIndex(const score::SessionIndex& in)
 
 bool Storage::saveCurrent(const score::Session& s)
 {
-    return write(kCurrentPath, score::ser::kMagicSession, &s, sizeof(s));
+    // Atomic as workouts / index: a crash mid-write must not destroy the
+    // only copy of the running session.
+    return write(kCurrentPath, score::ser::kMagicSession, &s, sizeof(s), true);
 }
 
 bool Storage::loadCurrent(score::Session& out)
 {
-    return read(kCurrentPath, score::ser::kMagicSession, &out, sizeof(out));
+    return readAtomic(kCurrentPath, score::ser::kMagicSession, &out, sizeof(out));
 }
 
 void Storage::clearCurrent()
 {
+    // The .tmp too: readAtomic() would bring an ended session back from it.
+    char tmp[SDK::Interface::IFileSystem::skMaxPathLen];
+    tmpPath(kCurrentPath, tmp, sizeof(tmp));
     remove(kCurrentPath);
+    remove(tmp);
 }
 
 bool Storage::saveSession(const score::Session& s)
@@ -159,7 +165,10 @@ bool Storage::readAtomic(const char* path, uint32_t magic, void* obj, size_t siz
     tmpPath(path, tmp, sizeof(tmp));
     if (!mKernel.fs.exist(tmp)) return false;
     LOG_WARNING("%s: absent, recovering from %s\n", path, tmp);
-    return read(tmp, magic, obj, size);
+    if (!read(tmp, magic, obj, size)) return false;
+    // Promote it: the next write's remove(tmp) must not delete the only copy.
+    if (!mKernel.fs.rename(tmp, path)) LOG_WARNING("%s: rename to %s failed\n", tmp, path);
+    return true;
 }
 
 void Storage::tmpPath(const char* path, char* out, size_t cap)

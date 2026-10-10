@@ -55,6 +55,20 @@ uint32_t Workout::estimateSeconds() const
     return secs;
 }
 
+bool Workout::validSteps() const
+{
+    if (stepCount < 1 || stepCount > kMaxSteps) {
+        return false;
+    }
+    for (uint8_t i = 0; i < stepCount; ++i) {
+        const Step& st = steps[i];
+        if (st.spot >= kSpotCount || st.goal.type > static_cast<uint8_t>(GoalType::Time) || st.goal.value == 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 const Workout& preset(uint8_t index)
 {
     return kPresets[index < kPresetCount ? index : kPresetCount - 1];

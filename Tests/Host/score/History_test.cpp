@@ -17,6 +17,7 @@ Workout named(const char* name) {
     Workout w{};
     std::snprintf(w.name, sizeof w.name, "%s", name);
     w.stepCount = 1;
+    for (Step& st : w.steps) st = { static_cast<uint8_t>(Spot::Ft), 0, { 0, 0, 10 } };   // all in range
     return w;
 }
 } // namespace
@@ -68,6 +69,23 @@ TEST(History, PushKeepsNewestLast) {
     ASSERT_NE(ix.newest(0), nullptr); EXPECT_EQ(ix.newest(0)->id, 3u);
     ASSERT_NE(ix.newest(2), nullptr); EXPECT_EQ(ix.newest(2)->id, 1u);
     EXPECT_EQ(ix.newest(3), nullptr);
+}
+TEST(History, PushSameIdReplacesRow) {
+    SessionIndex ix{};
+    ix.push(sum(1)); ix.push(sum(2)); ix.push(sum(3));
+    SessionSummary again = sum(2);
+    again.totalPct = 77;
+    EXPECT_EQ(ix.push(again), 0u);
+    EXPECT_EQ(ix.count, 3);
+    EXPECT_EQ(ix.items[1].id, 2u);           // in place, not appended
+    EXPECT_EQ(ix.items[1].totalPct, 77);
+    EXPECT_EQ(ix.newest(0)->id, 3u);
+    // Full index: a repeat still evicts nothing.
+    SessionIndex full{};
+    for (uint32_t id = 1; id <= kIndexCapacity; ++id) full.push(sum(id));
+    EXPECT_EQ(full.push(sum(1)), 0u);
+    EXPECT_EQ(full.count, kIndexCapacity);
+    EXPECT_EQ(full.items[0].id, 1u);
 }
 TEST(History, NewestOnEmpty) {
     const SessionIndex ix{};
@@ -187,4 +205,17 @@ TEST(WorkoutStore, Valid) {
     st.items[1].id = kFirstUserWorkoutId + kMaxUserWorkouts - 1; EXPECT_TRUE(st.valid());
     st.count = kMaxUserWorkouts + 1;
     EXPECT_FALSE(st.valid());
+}
+TEST(WorkoutStore, ValidChecksSteps) {
+    WorkoutStore st{};
+    uint8_t id = 0;
+    st.add(named("A"), id);
+    st.items[0].stepCount = 2;
+    EXPECT_TRUE(st.valid());
+    st.items[0].steps[1].spot = kSpotCount;                                     EXPECT_FALSE(st.valid());
+    st.items[0].steps[1].spot = 0;                                              EXPECT_TRUE(st.valid());
+    st.items[0].steps[1].goal.type = static_cast<uint8_t>(GoalType::Time) + 1;  EXPECT_FALSE(st.valid());
+    st.items[0].steps[1].goal.type = static_cast<uint8_t>(GoalType::Time);      EXPECT_TRUE(st.valid());
+    st.items[0].steps[1].goal.value = 0;                                        EXPECT_FALSE(st.valid());
+    st.items[0].stepCount = 1;                                                  EXPECT_TRUE(st.valid());
 }

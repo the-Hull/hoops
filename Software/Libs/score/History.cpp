@@ -30,6 +30,14 @@ SessionSummary summarize(const Session& s, uint32_t ymd)
 
 uint32_t SessionIndex::push(const SessionSummary& s)
 {
+    // The same session twice (e.g. saved again after a crash resume): its row
+    // is replaced in place, nothing is evicted.
+    for (uint8_t i = 0; i < count && i < kIndexCapacity; ++i) {
+        if (items[i].id == s.id) {
+            items[i] = s;
+            return 0;
+        }
+    }
     uint32_t evicted = 0;
     if (count >= kIndexCapacity) {
         evicted = items[0].id;
@@ -112,7 +120,7 @@ bool WorkoutStore::valid() const
     for (uint8_t i = 0; i < count; ++i) {
         const Workout& w = items[i];
         if (w.id < kFirstUserWorkoutId || w.id >= kFirstUserWorkoutId + kMaxUserWorkouts) return false;
-        if (w.stepCount < 1 || w.stepCount > kMaxSteps) return false;
+        if (!w.validSteps()) return false;
     }
     return true;
 }

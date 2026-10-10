@@ -49,7 +49,7 @@ public:
 
     bool  startOpen(Spot spot, uint32_t nowUnix);            ///< from Idle/Ended only
     bool  startWorkout(const Workout& w, uint32_t nowUnix);  ///< from Idle/Ended only
-    bool  restore(const Session& saved, const Workout* w);   ///< → Paused, flags resumable
+    bool  restore(const Session& saved, const Workout* w);   ///< → Paused, flags resumable; w gone or too short → open
     Event shot(bool made);                                   ///< Active only
     bool  undo(bool& madeOut);                               ///< Active, within current step
     bool  changeSpot(Spot spot);                             ///< open session, Active only

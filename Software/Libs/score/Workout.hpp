@@ -43,6 +43,9 @@ struct Workout {
 
     uint16_t totalShots() const;       ///< sum of Attempts/Makes values (Time steps count 0)
     uint32_t estimateSeconds() const;  ///< shots*12 + sum(rest) + sum(Time values)
+    /// stepCount 1..kMaxSteps and every used step in range: spot < kSpotCount,
+    /// goal type a GoalType, goal value > 0 (rest_s is free). Not the id or name.
+    bool validSteps() const;
 };
 static_assert(sizeof(Workout) == 1 + kNameLen + 1 + sizeof(Step) * kMaxSteps, "Workout flash layout changed");
 static_assert(std::has_unique_object_representations<Workout>::value, "Workout: no padding");

@@ -93,3 +93,11 @@ TEST(EngineWorkout, StepBitsHighHalf) { Workout w{}; w.stepCount = 1;
   for (int i = 0; i < 40; ++i) e.shot(i == 0 || i == 33 || i == 39);
   auto s = e.snapshot(); EXPECT_EQ(s.stepBitsLo, 0x1u); EXPECT_EQ(s.stepBitsHi, 0x82u);
   EXPECT_EQ(s.stepBits(), (uint64_t{1} << 39) | (uint64_t{1} << 33) | 1u); }
+TEST(EngineRestore, StepPastEditedWorkoutFallsBackToOpen) { SessionEngine a; Workout w = two(); a.startWorkout(w, 1);
+  a.shot(true); a.shot(true); a.shot(true); a.skipRest(); a.shot(false);   // step 2 of 2, 4 shots
+  Workout shorter = w; shorter.stepCount = 1;                              // edited meanwhile
+  SessionEngine b; ASSERT_TRUE(b.restore(a.session(), &shorter));
+  EXPECT_EQ(b.state(), SessionState::Paused); EXPECT_EQ(b.snapshot().mode, Snapshot::kModeOpen);
+  EXPECT_EQ(b.session().workoutId, 0); EXPECT_EQ(b.session().count, 4); EXPECT_EQ(b.workout(), nullptr);
+  EXPECT_TRUE(b.resume()); EXPECT_EQ(b.state(), SessionState::Active); EXPECT_EQ(b.shot(true), SessionEngine::Event::None);
+  EXPECT_EQ(b.session().count, 5); EXPECT_TRUE(b.changeSpot(Spot::LayupL)); }
