@@ -6,3 +6,4 @@ Software/Output/
 *.bak
 .superpowers/
 shots/
+dist/

@@ -1,0 +1,23 @@
+{
+  "manifest_version": 1,
+  "type": [
+    "activity"
+  ],
+  "name": "Hoops",
+  "icon": "icon.png",
+  "previews": "previews/",
+  "binary": "Hoops.uapp",
+  "appVersion": "0.0.0",
+  "minKernelVersion": "1.4.0",
+  "requiredHardware": [],
+  "stravaExport": false,
+  "id": "13F039C6FE024E86",
+  "supportsLaps": false,
+  "supportsDistance": false,
+  "supportsTrack": false,
+  "supportsHeartbeat": false,
+  "supportsElevation": false,
+  "supportsStep": false,
+  "supportsSpeed": "none",
+  "customMeasures": []
+}

@@ -1,0 +1,148 @@
+# Hoops — store listing
+
+Text for the app's page on apps.unawatch.com. Everything above "Maintainer notes" is written for store
+visitors; the last section is for the developer.
+
+## Name
+
+Hoops
+
+## Tagline
+
+Your basketball shooting coach on the wrist.
+
+## Short description
+
+Count makes and misses with one button press, at 13 court spots. Workouts, rest timers, court map, streaks
+and trends.
+
+<!-- 118 characters; the limit is 160. -->
+
+## Long description
+
+Hoops turns your UNA Watch into a shooting log for the court. Shoot, press a button, keep shooting: the right
+top button counts a make, the right bottom button a miss, and a short buzz confirms each one, so you never have
+to look at the screen between shots.
+
+**Open sessions.** Pick one of 13 spots (five three-point spots, five mid-range spots, the free-throw line and
+left and right layups) and start shooting. The screen shows makes and attempts, your last shots, the time and
+your heart rate, and the ring shows your percentage as you go, coloured green from 50 %, amber from 35 % and red
+below. Change spot at any time by holding the bottom left button, or
+set an open-session target (25 to 200 shots) and watch the ring fill up towards it.
+
+**Workouts.** Five presets are built in: Around the World, Free Throw 50, Mikan Layups, Mid-range Ladder and
+Game Shots. Each step has a spot and a goal (a number of shots, a number of makes, or a time) followed by a rest
+countdown you can extend or skip. Build your own workouts right on the watch, up to eight steps each, and keep
+up to ten of them.
+
+**Mistakes happen.** Pressed the wrong button? The top left button undoes the last shot. The bottom left
+button pauses; from the pause menu you resume, end and save, or discard. If the watch restarts mid-session,
+Hoops picks up where you left off.
+
+**Results.** Every saved session gets four pages: a court map with your percentage at every spot you shot from,
+your numbers by category (3PT, mid-range, free throws, layups), highlights (longest streak and where you made
+it, best spot, the spot to work on, time and shots per minute, average and maximum heart rate) and a trend of
+your last five sessions per category.
+
+**History.** The last 50 sessions are kept on the watch, newest first; open any of them to see its results
+again. The spot picker shows your last and best percentage at each spot. Turn on CSV export and every saved
+session is also written as a spreadsheet file you can copy off the watch over USB.
+
+**Made for the court.** Five makes in a row and every ten after that earn their own buzz and a toast. The
+backlight comes on with each shot and when you raise your wrist. Choose a dark or a light colour scheme (light
+reads better in bright sunshine), light or strong haptics or none, and whether heart rate is recorded.
+
+## Features
+
+- One-press scoring: right top = make, right bottom = miss, with distinct buzzes
+- 13 court spots across three-point, mid-range, free throw and layups
+- Open sessions with a live percentage ring and an optional shot target (25 / 50 / 100 / 200)
+- Five preset workouts and up to ten custom workouts built on the watch (up to eight steps each)
+- Goals by attempts, makes or time, with a rest countdown (+15 s or skip)
+- Undo, pause, resume after a restart
+- Results: court map, categories, highlights, five-session trend
+- History of the last 50 sessions, plus last and best percentage per spot
+- Streak haptics at 5 makes in a row and every 10
+- Heart rate (average and maximum per session), optional
+- CSV export of every saved session over USB mass storage, optional
+- Dark and light colour schemes; haptics off / light / strong
+- Works on the watch alone: no phone needed while you shoot
+
+## Controls
+
+| Button | In menus | While shooting | During rest |
+|---|---|---|---|
+| Top left (UP) | Move up | Undo last shot | Add 15 s |
+| Bottom left (DOWN) | Move down | Pause (hold: change spot) | Pause |
+| Top right (SELECT) | Open / confirm | Make | Skip rest |
+| Bottom right (BACK) | Back | Miss | — |
+
+In the pause menu, BACK resumes. Holding DOWN can be set to pause instead of changing spot (Settings).
+
+## Requirements
+
+- UNA Watch with kernel firmware 1.4.0 or later
+- No extra hardware and no phone connection needed. Heart rate uses the watch's own sensor.
+
+## What's new
+
+**Version 1.0** — first release: open sessions at 13 spots, five preset workouts, custom workouts, undo and
+pause, results with court map, categories, highlights and trend, 50-session history, per-spot records, streak
+haptics, CSV export, settings, dark and light colour schemes.
+
+## Category and tags
+
+- Category: Activity (Sports)
+- Tags: basketball, shooting, training, workout, sports, free throws, statistics
+
+## Previews
+
+Screenshots from the watch display (240 × 240, shown at 2×), in `previews/`:
+
+| File | Shows |
+|---|---|
+| `home.png` | Home menu with the last session's result |
+| `spot-picker.png` | Choosing one of the 13 spots, with last and best percentage |
+| `active-open.png` | An open session: makes / attempts, percentage, last shots, time, heart rate |
+| `active-workout.png` | A workout step in progress: step 1 of 4, shots left |
+| `rest.png` | Rest countdown between workout steps |
+| `pause.png` | Pause menu: resume, end and save, discard |
+| `results-court.png` | Results page 1: court map, percentage per spot |
+| `results-categories.png` | Results page 2: 3PT, mid-range, free throws, layups |
+| `results-highlights.png` | Results page 3: streak, best spot, work on, time, heart rate |
+| `results-trend.png` | Results page 4: trend over the last five sessions |
+| `history.png` | History list of saved sessions |
+| `workouts.png` | Preset and custom workouts |
+| `workout-preview.png` | A workout's steps before starting |
+| `step-builder.png` | Building a custom workout step on the watch |
+| `settings.png` | Settings: goals, target, haptics, scheme, CSV export and more |
+| `home-light.png` | Home in the light colour scheme |
+
+---
+
+## Maintainer notes
+
+Not part of the listing.
+
+**App ID.** `store/app-manifest.json` `"id"` must equal `APP_ID` in `Software/Apps/Hoops-CMake/CMakeLists.txt`.
+Both hold the local placeholder `13F039C6FE024E86` until the real ID comes from apps.unawatch.com;
+`tools/package_store.sh` refuses to package while it is the placeholder (unless `--allow-placeholder`, for a
+test package) and when the two differ.
+
+**Icons.** `tools/make_icons.py` (run with `.venv/bin/python3`) regenerates `Resources/icon_60x60.png`,
+`Resources/icon_30x30.png` and `store/icon.png`. Previews come from the self-test's screenshots
+(`tools/ppm2png.py`, see Task 12).
+
+**Submission checklist** — deadline **30 Oct 2026, 16:00 UK** (UNA App Competition):
+
+1. apps.unawatch.com → Add New → name "Hoops" + short description → copy the App ID.
+2. Put the App ID in both places: `APP_ID` in `Software/Apps/Hoops-CMake/CMakeLists.txt` and `"id"` in
+   `store/app-manifest.json`. Commit.
+3. Tag the release (`git tag v1.0.0`) so the build version (and the `.uapp` name and `appVersion`) is clean;
+   the version comes from git tags, and a dirty tree adds a suffix.
+4. `export UNA_SDK=$HOME/una-sdk && tools/package_store.sh` → `dist/Hoops-<ver>.zip` (builds the watch app,
+   fills `binary`/`appVersion`, stamps and checks `minKernelVersion`).
+5. On the app page: Version → Upload New → upload the zip; paste the listing text above (description,
+   previews).
+6. Release → Confirm and Publish.
+7. Submit the competition form with the store link.
