@@ -340,6 +340,7 @@ void Service::sendResults(uint32_t sessionId)
 
 void Service::sendHistory()
 {
+    // One page of the newest rows (total = offset = 0 for now); Task 6 streams every page.
     auto m = SDK::make_msg<CustomMessage::History>(mKernel);
     if (!m) return;
     for (uint8_t i = 0; i < score::kTrendCount; ++i) {

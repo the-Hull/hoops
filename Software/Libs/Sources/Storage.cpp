@@ -6,12 +6,16 @@
 
 #include "SDK/Interfaces/IFileSystem.hpp"
 
+#include "score/Spots.hpp"
+#include "score/Workout.hpp"
+
 #define LOG_MODULE_PRX      "Storage"
 #define LOG_MODULE_LEVEL    LOG_LEVEL_INFO
 #include "SDK/UnaLogger/Logger.h"
 
 namespace {
 constexpr const char* kWorkoutsPath = "workouts.bin";
+constexpr const char* kSettingsPath = "settings.bin";
 constexpr const char* kCurrentPath  = "current.bin";
 constexpr const char* kIndexPath    = "sessions/index.bin";
 } // namespace
@@ -29,6 +33,16 @@ bool Storage::loadWorkouts(score::WorkoutStore& out)
 bool Storage::saveWorkouts(const score::WorkoutStore& in)
 {
     return write(kWorkoutsPath, score::ser::kMagicWorkouts, &in, sizeof(in), true);
+}
+
+bool Storage::loadSettings(score::Settings& out)
+{
+    return readAtomic(kSettingsPath, score::ser::kMagicSettings, &out, sizeof(out));
+}
+
+bool Storage::saveSettings(const score::Settings& in)
+{
+    return write(kSettingsPath, score::ser::kMagicSettings, &in, sizeof(in), true);
 }
 
 bool Storage::loadIndex(score::SessionIndex& out)
@@ -88,11 +102,104 @@ void Storage::removeSession(uint32_t id)
     char path[SDK::Interface::IFileSystem::skMaxPathLen];
     sessionPath(id, path, sizeof(path));
     remove(path);
+    csvPath(id, path, sizeof(path));
+    remove(path);
+}
+
+bool Storage::saveSessionCsv(const score::Session& s, uint32_t ymd, const char* workoutName)
+{
+    char path[SDK::Interface::IFileSystem::skMaxPathLen];
+    csvPath(s.id, path, sizeof(path));
+    if (!mkParent(path)) return false;
+
+    // The name is a CSV field: a ',' (or a line break) would split the row.
+    char name[score::kNameLen];   // workout names are at most kNameLen - 1 chars; keeps a row < 96 B
+    snprintf(name, sizeof(name), "%s", workoutName ? workoutName : "Open");
+    for (char* c = name; *c; ++c)
+        if (*c == ',' || *c == '\n' || *c == '\r') *c = ' ';
+
+    std::unique_ptr<SDK::Interface::IFile> file = mKernel.fs.file(path);
+    if (!file) {
+        LOG_WARNING("%s: no file handle\n", path);
+        return false;
+    }
+    if (!file->open(true, true)) {
+        LOG_WARNING("%s: open for write failed\n", path);
+        return false;
+    }
+
+    // Each line is formatted into `line`, then collected in mBuf, which goes out
+    // whenever the next line would not fit (about 10 writes for 400 shots).
+    char   line[96];
+    size_t used = 0, total = 0;
+    bool   ok   = true;
+    auto flushBuf = [&]() {
+        if (!ok || used == 0) return;
+        size_t bw = 0;
+        ok = file->write(reinterpret_cast<const char*>(mBuf), used, bw) && bw == used;
+        if (!ok) LOG_WARNING("%s: write failed (%u/%u B)\n", path, static_cast<unsigned>(bw),
+                             static_cast<unsigned>(used));
+        total += bw;
+        used = 0;
+    };
+    auto append = [&](int len) {   // len = snprintf's result for `line`
+        if (!ok) return;
+        if (len < 0 || static_cast<size_t>(len) >= sizeof(line)) {   // snprintf failed or truncated
+            LOG_WARNING("%s: line too long\n", path);
+            ok = false;
+            return;
+        }
+        if (used + static_cast<size_t>(len) > sizeof(mBuf)) flushBuf();
+        if (!ok) return;
+        memcpy(mBuf + used, line, static_cast<size_t>(len));
+        used += static_cast<size_t>(len);
+    };
+
+    append(snprintf(line, sizeof(line), "session_id,date,workout,shot,spot,category,made,t_s\n"));
+    const uint16_t count = s.count <= score::kMaxShots ? s.count : score::kMaxShots;
+    for (uint16_t i = 0; i < count && ok; ++i) {
+        const score::Shot&     shot = s.shots[i];
+        const score::SpotInfo& info = score::spotInfo(shot.spot);
+        append(snprintf(line, sizeof(line), "%lu,%04u-%02u-%02u,%s,%u,%s,%s,%u,%u\n",
+                        static_cast<unsigned long>(s.id), static_cast<unsigned>(ymd / 10000u),
+                        static_cast<unsigned>((ymd / 100u) % 100u), static_cast<unsigned>(ymd % 100u), name,
+                        static_cast<unsigned>(i + 1), info.name, score::categoryShort(info.category),
+                        shot.made ? 1u : 0u, static_cast<unsigned>(shot.t_s)));
+    }
+    flushBuf();
+    const bool flushed = file->flush();
+    const bool closed  = file->close();
+    if (!ok || !flushed || !closed) {
+        LOG_WARNING("%s: not written (%u B)\n", path, static_cast<unsigned>(total));
+        remove(path);   // a torn copy would look complete to the user
+        return false;
+    }
+    LOG_INFO("%s: %u shots, %u B\n", path, static_cast<unsigned>(count), static_cast<unsigned>(total));
+    return true;
 }
 
 void Storage::sessionPath(uint32_t id, char* out, size_t cap)
 {
     snprintf(out, cap, "sessions/%lu.bin", static_cast<unsigned long>(id));
+}
+
+void Storage::csvPath(uint32_t id, char* out, size_t cap)
+{
+    snprintf(out, cap, "sessions/%lu.csv", static_cast<unsigned long>(id));
+}
+
+bool Storage::mkParent(const char* path)
+{
+    // Create the parent directory, as SettingsSerializer::save does.
+    const char* slash = strrchr(path, '/');
+    if (!slash) return true;
+    char dir[SDK::Interface::IFileSystem::skMaxPathLen]{};
+    snprintf(dir, sizeof(dir), "%.*s", static_cast<int>(slash - path), path);
+    if (!mKernel.fs.mkdir(dir)) {
+        LOG_WARNING("%s: mkdir failed\n", dir);
+        return false;
+    }
+    return true;
 }
 
 bool Storage::write(const char* path, uint32_t magic, const void* obj, size_t size, bool atomic)
@@ -103,16 +210,7 @@ bool Storage::write(const char* path, uint32_t magic, const void* obj, size_t si
         return false;
     }
 
-    // Create the parent directory, as SettingsSerializer::save does.
-    const char* slash = strrchr(path, '/');
-    if (slash) {
-        char dir[SDK::Interface::IFileSystem::skMaxPathLen]{};
-        snprintf(dir, sizeof(dir), "%.*s", static_cast<int>(slash - path), path);
-        if (!mKernel.fs.mkdir(dir)) {
-            LOG_WARNING("%s: mkdir failed\n", dir);
-            return false;
-        }
-    }
+    if (!mkParent(path)) return false;
 
     if (!atomic) return writeFile(path, n);
 
