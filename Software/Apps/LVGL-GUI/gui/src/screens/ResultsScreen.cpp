@@ -80,60 +80,14 @@ constexpr int32_t kTodayExtra = 8;     // the newest date may spill right
 constexpr int32_t kValueGap   = 8;     // bar top .. value label centre
 constexpr int32_t kDateY      = 202;
 
-constexpr const char* kDot = " \xC2\xB7 ";   // " · " (rendered " - ")
+constexpr const char* kDot = Theme::kMidDot;
 
 // --- Text helpers ------------------------------------------------------------
 
-/// A label with the first of @p texts that fits @p w in one of @p fonts
-/// (texts outer, fonts inner, normal spacing before -1 px); the last
-/// text in the last font, clipped, when none does.
-lv_obj_t* fitLabel(lv_obj_t* parent, const char* const* texts, uint8_t nTexts, const Font* fonts, uint8_t nFonts,
-                   int32_t x, int32_t w, int32_t yCentre, lv_text_align_t align, uint32_t color)
-{
-    const char* text  = texts[nTexts - 1];
-    Font        font  = fonts[nFonts - 1];
-    int32_t     space = -1;
-    bool        found = false;
-    for (uint8_t t = 0; t < nTexts && !found; ++t) {
-        for (uint8_t f = 0; f < nFonts && !found; ++f) {
-            for (int32_t ls = 0; ls >= -1 && !found; --ls) {
-                if (Theme::textWidth(fonts[f], texts[t], ls) <= w) {
-                    text = texts[t], font = fonts[f], space = ls, found = true;
-                }
-            }
-        }
-    }
-    lv_obj_t* l = Theme::label(parent, font, text, x, Theme::topFor(font, yCentre), w, align, color);
-    lv_obj_set_style_text_letter_space(l, space, LV_PART_MAIN);
-    return l;
-}
-
-/// Baseline of text in @p f centred on @p yCentre.
-int32_t baselineFor(Font f, int32_t yCentre)
-{
-    const lv_font_t* fn = Theme::font(f);
-    return Theme::topFor(f, yCentre) + lv_font_get_line_height(fn) - fn->base_line;
-}
-
-/// Two labels on one baseline (@p fa's, centred on @p yCentre), centred
-/// together across the screen.
-void pair(lv_obj_t* parent, Font fa, const char* a, uint32_t ca, Font fb, const char* b, uint32_t cb,
-          int32_t yCentre, int32_t gap)
-{
-    const int32_t wa = Theme::textWidth(fa, a);
-    const int32_t wb = Theme::textWidth(fb, b);
-    const int32_t x  = 120 - (wa + gap + wb) / 2;
-    Theme::label(parent, fa, a, x, Theme::topFor(fa, yCentre), wa + 1, LV_TEXT_ALIGN_LEFT, ca);
-    Theme::label(parent, fb, b, x + wa + gap, Theme::topForBaseline(fb, baselineFor(fa, yCentre)), wb + 1,
-                 LV_TEXT_ALIGN_LEFT, cb);
-}
-
-/// "3PT · L-Wing" -> "L-Wing"; names without a category part unchanged.
-const char* spotShort(const char* name)
-{
-    const char* p = strstr(name, kDot);
-    return p ? p + strlen(kDot) : name;
-}
+using Theme::fitLabel;
+using Theme::pair;
+using Theme::spotShort;
+using Theme::baselineFor;
 
 void fmtMa(char* out, size_t n, const score::SpotStat& s)
 {

@@ -49,7 +49,9 @@ void HomeScreen::onShow()
 
 void HomeScreen::onHide()
 {
-    mModel.homeIndex = static_cast<uint8_t>(mMenu->selected());
+    // The action, not the row: the rows shift when "Resume session" comes or
+    // goes (e.g. a stale running snapshot on return after a discard).
+    mModel.homeIndex = static_cast<uint8_t>(mActions[mMenu->selected()]);
 }
 
 bool HomeScreen::sessionInProgress() const
@@ -67,20 +69,9 @@ void HomeScreen::updateItems()
         return;
     }
 
-    // Keep the selected action across the change; first build uses homeIndex.
-    uint16_t sel = mModel.homeIndex;
-    if (mCount > 0) {
-        const Action current = mActions[mMenu->selected()];
-        sel = 0;
-        for (uint8_t i = 0; i < mCount; ++i) {
-            if (mActions[i] == current) {
-                sel = i;
-            }
-        }
-        if (current != Action::Resume) {
-            sel = static_cast<uint16_t>(resume ? sel + 1 : sel - 1);
-        }
-    }
+    // Keep the selected action across the change; the first build selects
+    // the action in homeIndex. Without that action (Resume gone): the first row.
+    const Action current = mCount > 0 ? mActions[mMenu->selected()] : static_cast<Action>(mModel.homeIndex);
 
     mCount     = 0;
     mHasResume = resume;
@@ -97,6 +88,12 @@ void HomeScreen::updateItems()
     add(Action::History,  "History",      Theme::kText);
     add(Action::Settings, "Settings",     Theme::kDim);
 
+    uint16_t sel = 0;
+    for (uint8_t i = 0; i < mCount; ++i) {
+        if (mActions[i] == current) {
+            sel = i;
+        }
+    }
     mMenu->setItems(mItems, mCount, sel);
 }
 
@@ -120,11 +117,10 @@ void HomeScreen::activate(Action a)
     ScreenManager& sm = ScreenManager::instance();
     switch (a) {
         case Action::Resume:
-            // Rest gets its own screen in a later task; until then Active.
-            if (static_cast<score::SessionState>(mModel.snapshot().state) == score::SessionState::Paused) {
-                sm.goTo(ScreenId::Pause);
-            } else {
-                sm.goTo(ScreenId::Active);
+            switch (static_cast<score::SessionState>(mModel.snapshot().state)) {
+                case score::SessionState::Paused: sm.goTo(ScreenId::Pause); break;
+                case score::SessionState::Rest:   sm.goTo(ScreenId::Rest); break;
+                default:                          sm.goTo(ScreenId::Active); break;
             }
             break;
         case Action::Open:

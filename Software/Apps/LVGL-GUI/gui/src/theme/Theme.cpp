@@ -8,7 +8,10 @@
 #include "gui/theme/Theme.hpp"
 #include "gui/Assets.hpp"
 
+#include "score/Workout.hpp"
+
 #include <cstdio>
+#include <cstring>
 
 namespace Theme
 {
@@ -132,6 +135,58 @@ void fmtDate(char* out, size_t n, uint32_t ymd)
         return;
     }
     snprintf(out, n, "%u.%u.", static_cast<unsigned>(ymd % 100u), static_cast<unsigned>((ymd / 100u) % 100u));
+}
+
+void fmtGoal(char* out, size_t n, uint8_t type, uint16_t value)
+{
+    switch (static_cast<score::GoalType>(type)) {
+        case score::GoalType::Makes: snprintf(out, n, "%u mk", static_cast<unsigned>(value)); break;
+        case score::GoalType::Time:  snprintf(out, n, "%u s", static_cast<unsigned>(value)); break;
+        default:                     snprintf(out, n, "x%u", static_cast<unsigned>(value)); break;
+    }
+}
+
+const char* spotShort(const char* name)
+{
+    const char* p = strstr(name, kMidDot);
+    return p ? p + strlen(kMidDot) : name;
+}
+
+lv_obj_t* fitLabel(lv_obj_t* parent, const char* const* texts, uint8_t nTexts, const Font* fonts, uint8_t nFonts,
+                   int32_t x, int32_t w, int32_t yCentre, lv_text_align_t align, uint32_t color)
+{
+    const char* text  = texts[nTexts - 1];
+    Font        f     = fonts[nFonts - 1];
+    int32_t     space = -1;
+    bool        found = false;
+    for (uint8_t t = 0; t < nTexts && !found; ++t) {
+        for (uint8_t i = 0; i < nFonts && !found; ++i) {
+            for (int32_t ls = 0; ls >= -1 && !found; --ls) {
+                if (textWidth(fonts[i], texts[t], ls) <= w) {
+                    text = texts[t], f = fonts[i], space = ls, found = true;
+                }
+            }
+        }
+    }
+    lv_obj_t* l = label(parent, f, text, x, topFor(f, yCentre), w, align, color);
+    lv_obj_set_style_text_letter_space(l, space, LV_PART_MAIN);
+    return l;
+}
+
+int32_t baselineFor(Font f, int32_t yCentre)
+{
+    const lv_font_t* fn = font(f);
+    return topFor(f, yCentre) + lv_font_get_line_height(fn) - fn->base_line;
+}
+
+void pair(lv_obj_t* parent, Font fa, const char* a, uint32_t ca, Font fb, const char* b, uint32_t cb,
+          int32_t yCentre, int32_t gap, int32_t xCentre)
+{
+    const int32_t wa = textWidth(fa, a);
+    const int32_t wb = textWidth(fb, b);
+    const int32_t x  = xCentre - (wa + gap + wb) / 2;
+    label(parent, fa, a, x, topFor(fa, yCentre), wa + 1, LV_TEXT_ALIGN_LEFT, ca);
+    label(parent, fb, b, x + wa + gap, topForBaseline(fb, baselineFor(fa, yCentre)), wb + 1, LV_TEXT_ALIGN_LEFT, cb);
 }
 
 } // namespace Theme

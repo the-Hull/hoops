@@ -100,6 +100,30 @@ void fmtDuration(char* out, size_t n, uint32_t seconds);
 /// YYYYMMDD -> "6.10." (day.month.); "--" for 0.
 void fmtDate(char* out, size_t n, uint32_t ymd);
 
+/// A workout step's goal, short: Attempts "x10", Makes "5 mk", Time "60 s"
+/// (@p type is score::GoalType; the faces have no multiplication sign).
+void fmtGoal(char* out, size_t n, uint8_t type, uint16_t value);
+
+/// " · " (U+00B7 between spaces), drawn " - " by setText().
+constexpr const char* kMidDot = " \xC2\xB7 ";
+
+/// "3PT · L-Wing" -> "L-Wing"; names without a " · " part unchanged.
+const char* spotShort(const char* name);
+
+/// A label with the first of @p texts that fits @p w in one of @p fonts
+/// (texts outer, fonts inner, normal letter spacing before -1 px); the last
+/// text in the last font, clipped, when none does. @p yCentre as header().
+lv_obj_t* fitLabel(lv_obj_t* parent, const char* const* texts, uint8_t nTexts, const Font* fonts, uint8_t nFonts,
+                   int32_t x, int32_t w, int32_t yCentre, lv_text_align_t align, uint32_t color);
+
+/// Baseline of text in @p f centred on @p yCentre.
+int32_t baselineFor(Font f, int32_t yCentre);
+
+/// Two labels on one baseline (@p fa's, centred on @p yCentre), centred
+/// together on @p xCentre (default: across the screen), @p gap px apart.
+void pair(lv_obj_t* parent, Font fa, const char* a, uint32_t ca, Font fb, const char* b, uint32_t cb,
+          int32_t yCentre, int32_t gap, int32_t xCentre = 120);
+
 } // namespace Theme
 
 #endif // THEME_HPP

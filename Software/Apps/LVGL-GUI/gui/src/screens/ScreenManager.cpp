@@ -19,8 +19,11 @@
 #include "gui/screens/HistoryScreen.hpp"
 #include "gui/screens/HomeScreen.hpp"
 #include "gui/screens/PauseScreen.hpp"
+#include "gui/screens/RestScreen.hpp"
 #include "gui/screens/ResultsScreen.hpp"
 #include "gui/screens/SpotPickerScreen.hpp"
+#include "gui/screens/WorkoutPreviewScreen.hpp"
+#include "gui/screens/WorkoutsScreen.hpp"
 
 ScreenManager& ScreenManager::instance()
 {
@@ -117,13 +120,16 @@ Screen* ScreenManager::create(ScreenId id)
             return new ResultsScreen(m);
         case ScreenId::History:
             return new HistoryScreen(m);
-
-        // Not built yet (later tasks): fall back to Home so the app never
-        // dead-ends.
         case ScreenId::Workouts:
+            return new WorkoutsScreen(m);
         case ScreenId::WorkoutPreview:
-        case ScreenId::StepBuilder:
+            return new WorkoutPreviewScreen(m);
         case ScreenId::Rest:
+            return new RestScreen(m);
+
+        // Not built yet (Task 14): fall back to Home so the app never
+        // dead-ends.
+        case ScreenId::StepBuilder:
             LOG_WARNING("Screen %u not implemented, showing Home\n", static_cast<unsigned>(id));
             return new HomeScreen(m);
     }

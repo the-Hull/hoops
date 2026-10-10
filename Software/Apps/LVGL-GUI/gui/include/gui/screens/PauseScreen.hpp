@@ -8,8 +8,10 @@
  * BACK resumes. Discard asks twice: the first SELECT turns the item into
  * "Discard? / SELECT again" for 3 s, a second SELECT within that time ends the
  * session without saving. End & save waits for the service's SAVED and then
- * opens the session's results. A running snapshot after a Paused one (the
- * session resumed elsewhere) returns to the shooting screen.
+ * opens the session's results. Resume sends RESUME and waits for the
+ * running snapshot: Rest returns to the Rest screen, Active to the shooting
+ * screen. A running snapshot after a Paused one (the session resumed
+ * elsewhere) routes the same way.
  ******************************************************************************
  */
 
@@ -66,6 +68,7 @@ private:
     bool           mEnding       = false;     ///< END_SESSION sent
     bool           mSaved        = false;     ///< SAVED arrived; Results on its way
     bool           mSeenPaused   = false;     ///< a Paused snapshot arrived here
+    bool           mResuming     = false;     ///< RESUME sent; the next running snapshot routes
 };
 
 #endif // PAUSE_SCREEN_HPP

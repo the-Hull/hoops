@@ -40,8 +40,18 @@ void Model::bind(ModelListener* l)
 
 // --- Intents ---------------------------------------------------------------
 
-void Model::startOpen(uint8_t spot)        { SDK::send_msg<CustomMessage::StartOpen>(mKernel, spot); }
-void Model::startWorkout(uint8_t id)       { SDK::send_msg<CustomMessage::StartWorkout>(mKernel, id); }
+void Model::startOpen(uint8_t spot)
+{
+    mHasStepDone = false;
+    SDK::send_msg<CustomMessage::StartOpen>(mKernel, spot);
+}
+
+void Model::startWorkout(uint8_t id)
+{
+    mHasStepDone = false;
+    SDK::send_msg<CustomMessage::StartWorkout>(mKernel, id);
+}
+
 void Model::shot(bool made)                { SDK::send_msg<CustomMessage::Shot>(mKernel, static_cast<uint8_t>(made)); }
 void Model::undo()                         { SDK::send_msg<CustomMessage::Undo>(mKernel); }
 void Model::pause()                        { SDK::send_msg<CustomMessage::Pause>(mKernel); }
@@ -85,6 +95,28 @@ void Model::exitApp()
 const score::Workout& Model::userWorkout(uint8_t i) const
 {
     return mUserWorkouts[i < score::kMaxUserWorkouts ? i : score::kMaxUserWorkouts - 1];
+}
+
+const score::Workout* Model::workoutById(uint8_t id) const
+{
+    if (const score::Workout* w = score::findPreset(id)) {
+        return w;
+    }
+    for (uint8_t i = 0; i < mUserCount; ++i) {
+        if (id != 0 && mUserWorkouts[i].id == id) {
+            return &mUserWorkouts[i];
+        }
+    }
+    return nullptr;
+}
+
+const char* Model::workoutName(uint8_t id) const
+{
+    if (id == 0) {
+        return "Open";
+    }
+    const score::Workout* w = workoutById(id);
+    return w ? w->name : "Custom";
 }
 
 uint32_t Model::todayYmd() const
@@ -171,9 +203,20 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
             l->onSnapshot(mSnapshot);
         } break;
 
-        case CustomMessage::STEP_DONE:
-            l->onStepDone(*static_cast<CustomMessage::StepDone*>(message));
-            break;
+        case CustomMessage::STEP_DONE: {
+            // Field by field: messages are not copyable (MessageBase).
+            auto* msg                = static_cast<CustomMessage::StepDone*>(message);
+            mStepDone.stepIndex      = msg->stepIndex;
+            mStepDone.workoutDone    = msg->workoutDone;
+            mStepDone.nextSpot       = msg->nextSpot;
+            mStepDone.nextGoalType   = msg->nextGoalType;
+            mStepDone.makes          = msg->makes;
+            mStepDone.attempts       = msg->attempts;
+            mStepDone.rest_s         = msg->rest_s;
+            mStepDone.nextGoalValue  = msg->nextGoalValue;
+            mHasStepDone             = true;
+            l->onStepDone(mStepDone);
+        } break;
 
         case CustomMessage::UNDO_RESULT: {
             auto* msg = static_cast<CustomMessage::UndoResult*>(message);

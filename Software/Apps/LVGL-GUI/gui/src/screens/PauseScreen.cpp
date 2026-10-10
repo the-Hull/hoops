@@ -103,9 +103,10 @@ void PauseScreen::show(const score::Snapshot& s)
 
 void PauseScreen::resume()
 {
-    // Rest gets its own screen in a later task; until then Active.
+    // Back to where the session was paused from, Active or Rest: the
+    // snapshot that answers RESUME says which (onSnapshot()).
+    mResuming = true;
     mModel.resume();
-    ScreenManager::instance().goTo(ScreenId::Active);
 }
 
 void PauseScreen::setConfirm(bool on)
@@ -193,10 +194,11 @@ void PauseScreen::onSnapshot(const score::Snapshot& s)
     }
     if (st == score::SessionState::Paused) {
         mSeenPaused = true;
-    } else if (mSeenPaused && !mEnding) {
-        // Active / Rest after Paused: the session runs again. Snapshots
-        // before the first Paused one predate our PAUSE and are only shown.
-        ScreenManager::instance().goTo(ScreenId::Active);
+    } else if ((mSeenPaused || mResuming) && !mEnding) {
+        // Active / Rest after Paused (or after our RESUME): the session runs
+        // again. Snapshots before the first Paused one predate our PAUSE and
+        // are only shown.
+        ScreenManager::instance().goTo(st == score::SessionState::Rest ? ScreenId::Rest : ScreenId::Active);
         return;
     }
     show(s);

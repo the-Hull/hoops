@@ -74,6 +74,16 @@ public:
     const score::Workout& userWorkout(uint8_t i) const;
     bool workoutsLoaded() const { return mWorkoutsLoaded; }
 
+    /// A preset or a user workout (from the list held) by id; nullptr if none.
+    const score::Workout* workoutById(uint8_t id) const;
+    /// "Open" for 0, the workout's name, or "Custom" for an id not known.
+    const char* workoutName(uint8_t id) const;
+
+    /// The last STEP_DONE of the running workout; hasStepDone() is false
+    /// until one arrives, and again after startWorkout() / startOpen().
+    const CustomMessage::StepDone& lastStepDone() const { return mStepDone; }
+    bool hasStepDone() const { return mHasStepDone; }
+
     /// The last RESULTS reply. hasResults() is true only when the reply to
     /// the latest requestResults() named a session (sessionId != 0); a reply
     /// with sessionId 0 means "none" and still raises onResults().
@@ -98,7 +108,8 @@ public:
     ResultsFrom resultsFrom = ResultsFrom::Session;
     uint32_t    resultsSessionId = 0;   ///< saved session to show when resultsFrom == History
 
-    uint8_t homeIndex = 0, workoutsIndex = 0, historyIndex = 0, resultsPage = 0;
+    uint8_t homeIndex = 0;   ///< HomeScreen's selected action (its Action enum), not a row
+    uint8_t workoutsIndex = 0, historyIndex = 0, resultsPage = 0;
     uint8_t selectedWorkoutId = 1;   ///< preview / start
 
     score::Workout& draft() { return mDraft; }
@@ -138,6 +149,9 @@ private:
     bool                   mHasResults = false;
     CustomMessage::History mHistory;
     bool                   mHasHistory = false;
+
+    CustomMessage::StepDone mStepDone;
+    bool                    mHasStepDone = false;
 
     std::tm        mTime {};
     score::Workout mDraft {};
