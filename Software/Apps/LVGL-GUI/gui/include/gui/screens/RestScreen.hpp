@@ -38,6 +38,7 @@ public:
 
     void onShow() override;
     void onKey(uint8_t code) override;
+    void onAction(KeyInput::Action a) override;
 
     void onSnapshot(const score::Snapshot& s) override;
     void onStepDone(const CustomMessage::StepDone& d) override;

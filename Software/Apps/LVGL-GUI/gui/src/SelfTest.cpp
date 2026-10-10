@@ -84,6 +84,26 @@ bool heldMake(const Model& m)
         && m.snapshot().totalAttempts == 4 && visibleLabel("/4");
 }
 
+// Session 1's totals after the press-order cases below: all makes.
+bool makesSoFar(const Model& m, uint16_t n)
+{
+    char of[8];
+    snprintf(of, sizeof(of), "/%u", static_cast<unsigned>(n));
+    return onScreen(ScreenId::Active) && m.hasSnapshot() && m.snapshot().totalMakes == n
+        && m.snapshot().totalAttempts == n && visibleLabel(of);
+}
+bool fiveMakes(const Model& m)  { return makesSoFar(m, 5); }
+bool sixMakes(const Model& m)   { return makesSoFar(m, 6); }
+bool sevenMakes(const Model& m) { return makesSoFar(m, 7); }
+
+/// The SELECT click arriving after its release (the order the watch may
+/// use), in the same frame: KeyInput must count the press once.
+void lateSelectClick()
+{
+    uint32_t key = '3';
+    lv_obj_send_event(lv_screen_active(), LV_EVENT_KEY, &key);
+}
+
 // End & save on a session without shots: dropped (SAVED 0), Home says so.
 bool emptyNotSaved(const Model& m)
 {
@@ -536,6 +556,16 @@ const Step kSteps[] = {
     { 2500, nullptr, nullptr, 'e', "Active: SELECT press (slow)" },
     {  600, nullptr, nullptr, 'd', "Active: SELECT release after 600 ms (HoldRelease)" },
     {  600, heldMake, "a 600 ms SELECT press counted a make: 4/4",
+                             'e', "Active: SELECT press (short)" },
+    {   30, nullptr, nullptr, '3', "Active: SELECT click (CLICK before RELEASE)" },
+    {   30, nullptr, nullptr, 'd', "Active: SELECT release" },
+    {  600, fiveMakes, "short press, CLICK then RELEASE: one make, 5/5",
+                             'e', "Active: SELECT press (short)" },
+    {   30, nullptr, nullptr, 'd', "Active: SELECT release, then its CLICK (RELEASE before CLICK)", &lateSelectClick },
+    {  600, sixMakes, "short press, RELEASE then CLICK: one make, 6/6",
+                             'e', "Active: SELECT press (short)" },
+    {   30, nullptr, nullptr, 'd', "Active: SELECT release, no CLICK at all (HoldRelease after 60 ms)" },
+    {  600, sevenMakes, "short press without CLICK: one make (delayed HoldRelease), 7/7",
                              'w', "Active: DOWN press" },
     {  600, holdHint, "hold fired: still on Active, toast Release to change spot",
                              's', "Active: DOWN release after the hold -> SpotPicker (change spot)" },

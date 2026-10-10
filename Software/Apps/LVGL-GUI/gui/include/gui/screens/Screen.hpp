@@ -20,6 +20,7 @@
 
 #include "gui/model/Model.hpp"
 #include "gui/model/ModelListener.hpp"
+#include "gui/widgets/KeyInput.hpp"
 
 class Screen : public ModelListener
 {
@@ -51,6 +52,15 @@ public:
 protected:
     /// Populate mRoot with widgets. mRoot exists and is styled as the background.
     virtual void build() = 0;
+
+    /// A KeyInput action: what onKey()'s feed() returned, or one delivered
+    /// later through keyAction() (Hold, or a HoldRelease that waited for a
+    /// late CLICK). Screens act on KeyInput::isActivate() actions here.
+    virtual void onAction(KeyInput::Action a) { (void)a; }
+
+    /// KeyInput::Callback for a screen's KeyInput (ctx = the Screen):
+    /// forwards to onAction().
+    static void keyAction(void* ctx, KeyInput::Action a);
 
     Model&    mModel;
     lv_obj_t* mRoot = nullptr;

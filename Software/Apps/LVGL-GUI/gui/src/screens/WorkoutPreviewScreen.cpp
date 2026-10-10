@@ -48,7 +48,7 @@ int32_t rowY(uint8_t i, uint8_t rows)
 
 WorkoutPreviewScreen::WorkoutPreviewScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
 {
 }
 
@@ -174,7 +174,11 @@ void WorkoutPreviewScreen::edit()
 
 void WorkoutPreviewScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void WorkoutPreviewScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a)) {
         return;
     }

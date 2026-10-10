@@ -51,7 +51,7 @@ bool resting(const Model& m)
 
 RestScreen::RestScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
 {
 }
 
@@ -278,7 +278,11 @@ void RestScreen::endTimerCb(lv_timer_t* t)
 
 void RestScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void RestScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a) || mEnding) {
         return;
     }

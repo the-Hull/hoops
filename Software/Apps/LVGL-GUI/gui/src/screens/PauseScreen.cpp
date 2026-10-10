@@ -33,7 +33,7 @@ const ListMenu::Item kConfirmItem = { "Discard?", "SELECT again", Theme::kBad };
 
 PauseScreen::PauseScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
 {
     mItems[kResume]  = { "Resume", nullptr, 0 };
     mItems[kEndSave] = { "End & save", nullptr, 0 };
@@ -182,7 +182,11 @@ void PauseScreen::select()
 
 void PauseScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void PauseScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a) || mEnding) {
         return;
     }

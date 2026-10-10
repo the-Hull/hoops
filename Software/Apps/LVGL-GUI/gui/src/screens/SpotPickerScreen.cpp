@@ -29,7 +29,7 @@ constexpr int32_t kFooterY    = 211;
 
 SpotPickerScreen::SpotPickerScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
 {
     for (uint8_t i = 0; i < score::kSpotCount; ++i) {
         mItems[i] = { score::spotInfo(i).name, nullptr, 0 };
@@ -141,7 +141,11 @@ void SpotPickerScreen::back()
 
 void SpotPickerScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void SpotPickerScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a)) {
         return;
     }

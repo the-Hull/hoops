@@ -155,7 +155,7 @@ const ListMenu::Item kConfirmItem       = { "Delete?", "SELECT again", Theme::kB
 
 StepBuilderScreen::StepBuilderScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
 {
 }
 
@@ -608,7 +608,11 @@ void StepBuilderScreen::toastTimerCb(lv_timer_t* t)
 
 void StepBuilderScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void StepBuilderScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a) || mBusy) {
         return;
     }

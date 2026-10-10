@@ -44,6 +44,7 @@ public:
 
     void onShow() override;
     void onKey(uint8_t code) override;
+    void onAction(KeyInput::Action a) override;
 
     void onSnapshot(const score::Snapshot& s) override;
     void onStepDone(const CustomMessage::StepDone& d) override;
@@ -63,7 +64,6 @@ private:
 
     static void toastTimerCb(lv_timer_t* t);
     static void liveTimerCb(lv_timer_t* t);
-    static void onHold(void* ctx, KeyInput::Action a);
 
     void stopLiveTimer();
 

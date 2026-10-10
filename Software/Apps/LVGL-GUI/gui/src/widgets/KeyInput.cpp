@@ -54,15 +54,10 @@ KeyInput::KeyInput(Callback cb, void* ctx)
 {
 }
 
-void KeyInput::noHold(void* ctx, Action a)
-{
-    (void)ctx;
-    (void)a;
-}
-
 KeyInput::~KeyInput()
 {
     stopTimer();
+    stopReleaseTimer();
 }
 
 KeyInput::Action KeyInput::feed(uint8_t code)
@@ -70,36 +65,53 @@ KeyInput::Action KeyInput::feed(uint8_t code)
     const Decoded d = decode(code);
     switch (d.code) {
         case Code::Press:
+            flushRelease();   // the previous press ends before this one starts
             stopTimer();
-            mPressed  = d.btn;
-            mSuppress = Btn::None;
-            mClicked  = false;
-            mTimer    = lv_timer_create(&KeyInput::timerCb, kHoldMs, this);
+            mPressed   = d.btn;
+            mSuppress  = Btn::None;
+            mClicked   = false;
+            mHoldFired = false;
+            mTimer     = lv_timer_create(&KeyInput::timerCb, kHoldMs, this);
             return kNone;
 
-        case Code::Release:
+        case Code::Release: {
             if (d.btn != mPressed) {
                 return kNone;   // pressed on another screen, or a stray release
             }
             stopTimer();
-            mPressed  = Btn::None;
-            mSuppress = Btn::None;   // the CLICK, if any, came before this RELEASE
-            if (mClicked) {
-                mClicked = false;
-                return kNone;
+            mPressed = Btn::None;
+            const bool clicked = mClicked;
+            mClicked = false;
+            if (clicked) {
+                return kNone;   // the CLICK came first and was the press's action
             }
-            // No Click for this press: a hold, or a press the kernel did not
-            // count as a click. Either way it ends here, once.
-            return { Kind::HoldRelease, d.btn };
+            if (mHoldFired) {
+                // >= kHoldMs: the kernel sends no CLICK for it (a stray one
+                // stays swallowed by mSuppress until the next PRESS).
+                mHoldFired = false;
+                return { Kind::HoldRelease, d.btn };
+            }
+            // Short, and no CLICK yet: it may still come after this RELEASE.
+            // Wait kClickWaitMs for it; without it the press ends as a
+            // HoldRelease, delivered through the callback.
+            stopReleaseTimer();
+            mReleaseBtn   = d.btn;
+            mReleaseTimer = lv_timer_create(&KeyInput::releaseTimerCb, kClickWaitMs, this);
+            return kNone;
+        }
 
         case Code::Click:
+            if (d.btn == mReleaseBtn && mReleaseTimer) {
+                stopReleaseTimer();   // the CLICK after the RELEASE: one Click, no HoldRelease
+                return { Kind::Click, d.btn };
+            }
+            flushRelease();           // another button: the pending press ends first
             if (d.btn == mSuppress) {
-                mSuppress = Btn::None;   // the Hold fired: the RELEASE reports this press
-                return kNone;
+                return kNone;         // the Hold fired: the RELEASE reports this press
             }
             if (d.btn == mPressed) {
                 mClicked = true;
-                stopTimer();   // the press is over; no Hold may follow its Click
+                stopTimer();          // the press is over; no Hold may follow its Click
             }
             return { Kind::Click, d.btn };
 
@@ -112,9 +124,11 @@ KeyInput::Action KeyInput::feed(uint8_t code)
 void KeyInput::cancel()
 {
     stopTimer();
-    mPressed  = Btn::None;
-    mSuppress = Btn::None;
-    mClicked  = false;
+    stopReleaseTimer();   // dropped, not delivered: the GUI is going off screen
+    mPressed   = Btn::None;
+    mSuppress  = Btn::None;
+    mClicked   = false;
+    mHoldFired = false;
 }
 
 void KeyInput::stopTimer()
@@ -125,6 +139,47 @@ void KeyInput::stopTimer()
     }
 }
 
+void KeyInput::stopReleaseTimer()
+{
+    if (mReleaseTimer) {
+        lv_timer_delete(mReleaseTimer);
+        mReleaseTimer = nullptr;
+    }
+    mReleaseBtn = Btn::None;
+}
+
+void KeyInput::flushRelease()
+{
+    if (!mReleaseTimer) {
+        return;
+    }
+    const Btn btn = mReleaseBtn;
+    stopReleaseTimer();
+    deliver({ Kind::HoldRelease, btn });
+}
+
+void KeyInput::deliver(Action a)
+{
+    mPending = a;
+    if (mCb) {
+        mCb(mCtx, mPending);
+        return;
+    }
+    static bool sWarned = false;
+    if (!sWarned) {
+        sWarned = true;
+        LOG_WARNING("Action %u on button %u dropped: no callback set\n", static_cast<unsigned>(a.kind),
+                    static_cast<unsigned>(a.btn));
+    }
+}
+
+void KeyInput::releaseTimerCb(lv_timer_t* t)
+{
+    // No CLICK within kClickWaitMs of the RELEASE: the press ends as a
+    // HoldRelease. (The callback may switch screens: touch nothing after.)
+    static_cast<KeyInput*>(lv_timer_get_user_data(t))->flushRelease();
+}
+
 void KeyInput::timerCb(lv_timer_t* t)
 {
     auto* self = static_cast<KeyInput*>(lv_timer_get_user_data(t));
@@ -132,15 +187,7 @@ void KeyInput::timerCb(lv_timer_t* t)
     if (self->mPressed == Btn::None || self->mClicked) {
         return;
     }
+    self->mHoldFired = true;
     self->mSuppress  = self->mPressed;
-    self->mPending   = { Kind::Hold, self->mPressed };
-    if (self->mCb) {
-        self->mCb(self->mCtx, self->mPending);
-    } else {
-        static bool sWarned = false;
-        if (!sWarned) {
-            sWarned = true;
-            LOG_WARNING("Hold on button %u dropped: no callback set\n", static_cast<unsigned>(self->mPending.btn));
-        }
-    }
+    self->deliver({ Kind::Hold, self->mPressed });
 }

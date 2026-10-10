@@ -45,3 +45,8 @@ void Screen::keyEventCb(lv_event_t* e)
     self->mModel.handleKeyEvent(code);
     self->onKey(code);
 }
+
+void Screen::keyAction(void* ctx, KeyInput::Action a)
+{
+    static_cast<Screen*>(ctx)->onAction(a);
+}

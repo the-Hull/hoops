@@ -170,7 +170,7 @@ void spotCard(lv_obj_t* parent, uint8_t col, uint8_t row, const char* title, uin
 
 ResultsScreen::ResultsScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
     , mPage(model.resultsPage < kPages ? model.resultsPage : 0)
 {
 }
@@ -591,7 +591,11 @@ void ResultsScreen::step(int8_t dir)
 
 void ResultsScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void ResultsScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a)) {
         return;
     }

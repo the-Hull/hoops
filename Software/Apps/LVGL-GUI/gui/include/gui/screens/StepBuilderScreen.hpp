@@ -41,6 +41,7 @@ public:
     ~StepBuilderScreen() override;
 
     void onKey(uint8_t code) override;
+    void onAction(KeyInput::Action a) override;
 
     void onWorkoutSaved(uint8_t id) override;
     void onSuspend() override;

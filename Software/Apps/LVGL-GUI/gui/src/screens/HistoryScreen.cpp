@@ -25,7 +25,7 @@ constexpr int32_t kEmptyY  = 106;   // where the pill would be
 
 HistoryScreen::HistoryScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
 {
 }
 
@@ -131,7 +131,11 @@ void HistoryScreen::open()
 
 void HistoryScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void HistoryScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a)) {
         return;
     }

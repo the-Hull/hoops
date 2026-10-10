@@ -90,7 +90,7 @@ cd Software/Apps/LVGL-GUI/simulator
 cmake -S . -B build-selftest -G Ninja -DCMAKE_CXX_FLAGS=-DHOOPS_SELFTEST=1 && cmake --build build-selftest
 rm -f ../../../Output/workouts.bin ../../../Output/current.bin    # fresh store, no session in progress
 (cd build/bin && SDL_VIDEODRIVER=dummy timeout 400 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
-#   full walk: "done: 86 checks passed, 0 failed"
+#   full walk: "done: 89 checks passed, 0 failed"
 # Crash resume: phase 1 starts an open session, 5 shots (3 makes), then exits without ending it
 # (kill -9 it after "phase 1 ready" for a real crash); phase 2 restarts, checks that neither an open
 # session nor a workout can start while it is in progress (toasts), then Resume -> Pause 3/5 (9 checks).
@@ -117,11 +117,13 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
 
 - Display: 1.2" round MIP LCD, 240×240, 64 colours (ABGR2222), LED backlight, no touch.
 - Buttons: L1 top-left (UP), L2 bottom-left (DOWN), R1 top-right (SELECT/START/STOP), R2 bottom-right (BACK).
-  LVGL: key events via `LV_EVENT_KEY` → `Screen::onKey(code)`. The kernel sends PRESS, CLICK (only for holds
-  < 500 ms), RELEASE, in that order; `KeyInput` turns these into Click / Hold (500 ms timer) / HoldRelease, and
-  every press ends as exactly one Click or HoldRelease (HoldRelease = the release of a press with no Click, held
-  or not). Screens act on `KeyInput::isActivate()` (either one), so a slow press is never lost; screens that
-  navigate on a hold do it on HoldRelease, so the release can't reach the next screen.
+  LVGL: key events via `LV_EVENT_KEY` → `Screen::onKey(code)`, one code per 100 ms frame. The kernel sends PRESS,
+  RELEASE and CLICK (only for holds < 500 ms); the simulator sends CLICK before RELEASE, the watch's order is not
+  documented, so `KeyInput` does not depend on it: every press ends as exactly one Click or HoldRelease (a short
+  RELEASE without CLICK waits 60 ms for a late CLICK, else becomes a HoldRelease via the callback; after a 500 ms
+  Hold the RELEASE is a HoldRelease at once). Screens act on `KeyInput::isActivate()` in `Screen::onAction()`
+  (feed() results and callback deliveries alike), so a slow press is never lost and a short one never counts
+  twice; screens that navigate on a hold do it on HoldRelease, so the release can't reach the next screen.
 - Sensors (`SDK::Sensor::Type`): ACCELEROMETER, GYROSCOPE, FUSION, HEART_RATE, WRIST_MOTION, MOTION_DETECT,
   ACTIVITY_RECOGNITION, GESTURE_RECOGNITION (undocumented), TOUCH_DETECT. `SDK::Sensor::Connection(type, period,
   latency)`; batched `EventData`.
@@ -175,15 +177,16 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
 
 MVP complete (2026-10-10): engine + host tests, service (IPC, haptics, storage, crash resume, HR, wrist-raise
 backlight), all 10 screens with presets, custom workouts, results, history and trend; self-test 84/84 and
-crash-resume 5/5 headless; `Hoops_0.0.0-dev.uapp` builds. Final review fixes (2026-10-10): self-test 86/86,
+crash-resume 5/5 headless; `Hoops_0.0.0-dev.uapp` builds. Final review fixes (2026-10-10): self-test 89/89,
 crash-resume 9/9, 66 host tests.
 
 Known limitations / next:
 - HISTORY carries 5 rows (`kTrendCount`); the index keeps 50 — the History screen shows only the newest 5.
 - Idle timeout (60 s, exits the app) only on Home and only without a session in progress.
 - The date (LOCAL_TIME) is sent once at GUI start; a GUI left open past midnight shows yesterday's "today".
-- Hold = 500 ms (`KeyInput::kHoldMs`) with HoldRelease semantics (see Hardware facts); the kernel's
-  PRESS → CLICK → RELEASE order is taken from the SDK simulator — confirm on the watch.
+- Hold = 500 ms (`KeyInput::kHoldMs`) with HoldRelease semantics (see Hardware facts). A CLICK that reaches the
+  GUI more than 60 ms (`kClickWaitMs`, in practice one frame) after its RELEASE would count twice — confirm on
+  the watch.
 - Workout ids are reused after a delete (lowest free id ≥ 100), and History rows store only the id, so an
   old row shows the name of whatever workout now has that id.
 - SAVE_WORKOUT is validated in the service (steps in range, NUL-terminated name); WORKOUT_SAVED{0} → builder

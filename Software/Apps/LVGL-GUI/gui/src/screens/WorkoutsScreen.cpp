@@ -23,7 +23,7 @@ constexpr int32_t kHeaderY = 49;
 
 WorkoutsScreen::WorkoutsScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
 {
 }
 
@@ -103,7 +103,11 @@ void WorkoutsScreen::select()
 
 void WorkoutsScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void WorkoutsScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a)) {
         return;
     }

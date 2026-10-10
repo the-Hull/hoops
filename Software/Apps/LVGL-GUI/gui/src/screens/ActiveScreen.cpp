@@ -56,7 +56,7 @@ const Layout& layoutFor(bool workout) { return workout ? kWorkout : kOpen; }
 
 ActiveScreen::ActiveScreen(Model& model)
     : Screen(model)
-    , mKeys(&ActiveScreen::onHold, this)
+    , mKeys(&Screen::keyAction, this)
 {
 }
 
@@ -468,22 +468,24 @@ void ActiveScreen::pauseNow()
     ScreenManager::instance().goTo(ScreenId::Pause);
 }
 
-void ActiveScreen::onHold(void* ctx, KeyInput::Action a)
-{
-    // Open session, DOWN held past 500 ms: say what the release will do.
-    auto* self = static_cast<ActiveScreen*>(ctx);
-    if (a.btn == KeyInput::Btn::Down && !self->mWorkoutLayout) {
-        self->showToast("Release to change spot", kHoldToastMs);
-        self->mHoldToast = true;
-    }
-}
-
 void ActiveScreen::onKey(uint8_t code)
 {
     if (mHoldToast) {
         hideToast();   // any key ends the hold hint: the release, or another button
     }
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void ActiveScreen::onAction(KeyInput::Action a)
+{
+    if (a.kind == KeyInput::Kind::Hold) {
+        // Open session, DOWN held past 500 ms: say what the release will do.
+        if (a.btn == KeyInput::Btn::Down && !mWorkoutLayout) {
+            showToast("Release to change spot", kHoldToastMs);
+            mHoldToast = true;
+        }
+        return;
+    }
     if (!KeyInput::isActivate(a)) {
         return;
     }

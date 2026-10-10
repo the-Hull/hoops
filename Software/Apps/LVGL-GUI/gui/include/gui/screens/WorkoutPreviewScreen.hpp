@@ -32,6 +32,7 @@ public:
 
     void onShow() override;
     void onKey(uint8_t code) override;
+    void onAction(KeyInput::Action a) override;
 
     void onWorkouts() override;
     void onSuspend() override;

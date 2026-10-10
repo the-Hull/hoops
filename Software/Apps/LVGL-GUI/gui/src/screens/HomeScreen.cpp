@@ -26,7 +26,7 @@ constexpr int32_t kHintY     = 50;
 
 HomeScreen::HomeScreen(Model& model)
     : Screen(model)
-    , mKeys(&KeyInput::noHold, nullptr)
+    , mKeys(&Screen::keyAction, this)
 {
 }
 
@@ -162,7 +162,11 @@ void HomeScreen::activate(Action a)
 
 void HomeScreen::onKey(uint8_t code)
 {
-    const KeyInput::Action a = mKeys.feed(code);
+    onAction(mKeys.feed(code));
+}
+
+void HomeScreen::onAction(KeyInput::Action a)
+{
     if (!KeyInput::isActivate(a)) {
         return;
     }

@@ -37,6 +37,7 @@ public:
 
     void onShow() override;
     void onKey(uint8_t code) override;
+    void onAction(KeyInput::Action a) override;
 
     void onResults() override;
     void onHistory() override;
