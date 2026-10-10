@@ -25,3 +25,40 @@ TEST(EngineOpen, EndFreezes) { SessionEngine e; e.startOpen(Spot::Ft, 1); e.shot
   EXPECT_TRUE(e.startOpen(Spot::Ft, 5)); EXPECT_EQ(e.session().count, 0); }
 TEST(EngineOpen, HrAverage) { SessionEngine e; e.startOpen(Spot::Ft, 1); e.addHr(140); e.addHr(160);
   EXPECT_EQ(e.snapshot().hr, 160); EXPECT_EQ(e.session().hrMax, 160); EXPECT_EQ(e.session().hrSum, 300u); EXPECT_EQ(e.session().hrN, 2); }
+
+static Workout two() { Workout w{}; w.id = 7; w.stepCount = 2;
+  w.steps[0] = { (uint8_t)Spot::Ft,   { (uint8_t)GoalType::Attempts, 3 }, 10 };
+  w.steps[1] = { (uint8_t)Spot::Top3, { (uint8_t)GoalType::Makes,    2 }, 0  }; return w; }
+TEST(EngineWorkout, AttemptsGoalEntersRest) { SessionEngine e; e.startWorkout(two(), 1);
+  EXPECT_EQ(e.snapshot().mode, 1); EXPECT_EQ(e.snapshot().stepCount, 2); EXPECT_EQ(e.snapshot().goalValue, 3);
+  e.shot(true); e.shot(false); EXPECT_EQ(e.shot(true), SessionEngine::Event::StepDone);
+  EXPECT_EQ(e.state(), SessionState::Rest); auto s = e.snapshot(); EXPECT_EQ(s.restRemaining_s, 10); EXPECT_EQ(s.nextSpot, (uint8_t)Spot::Top3);
+  EXPECT_EQ(e.lastStep().makes, 2); EXPECT_EQ(e.lastStep().attempts, 3); EXPECT_EQ(e.lastStep().rest_s, 10);
+  EXPECT_EQ(e.shot(true), SessionEngine::Event::None); }   // no shots in rest
+TEST(EngineWorkout, RestCountsDownThenAdvances) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true);
+  for (int i = 0; i < 9; ++i) EXPECT_EQ(e.tick(), SessionEngine::Event::None);
+  EXPECT_EQ(e.tick(), SessionEngine::Event::RestOver); EXPECT_EQ(e.state(), SessionState::Active);
+  auto s = e.snapshot(); EXPECT_EQ(s.stepIndex, 1); EXPECT_EQ(s.spot, (uint8_t)Spot::Top3); EXPECT_EQ(s.stepAttempts, 0); EXPECT_EQ(s.totalAttempts, 3); EXPECT_EQ(s.elapsed_s, 10u); }
+TEST(EngineWorkout, SkipAndExtendRest) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true);
+  EXPECT_TRUE(e.extendRest(15)); EXPECT_EQ(e.snapshot().restRemaining_s, 25); EXPECT_TRUE(e.skipRest()); EXPECT_EQ(e.snapshot().stepIndex, 1); EXPECT_FALSE(e.skipRest()); }
+TEST(EngineWorkout, MakesGoalAndWorkoutDone) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true); e.skipRest();
+  e.shot(false); e.shot(true); EXPECT_EQ(e.shot(true), SessionEngine::Event::WorkoutDone);
+  EXPECT_EQ(e.state(), SessionState::Active); EXPECT_TRUE(e.snapshot().flags & Snapshot::kWorkoutDone);
+  EXPECT_EQ(e.shot(true), SessionEngine::Event::None); EXPECT_EQ(e.snapshot().totalAttempts, 7); } // extra shots allowed
+TEST(EngineWorkout, UndoStopsAtStepBoundary) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true); e.skipRest();
+  bool m; EXPECT_FALSE(e.undo(m)); e.shot(false); EXPECT_TRUE(e.undo(m)); EXPECT_FALSE(e.undo(m)); }
+TEST(EngineWorkout, TimeGoal) { Workout w{}; w.stepCount = 1; w.steps[0] = { (uint8_t)Spot::Ft, { (uint8_t)GoalType::Time, 5 }, 0 };
+  SessionEngine e; e.startWorkout(w, 1); for (int i = 0; i < 4; ++i) EXPECT_EQ(e.tick(), SessionEngine::Event::None);
+  EXPECT_EQ(e.tick(), SessionEngine::Event::WorkoutDone); }
+TEST(EngineWorkout, ZeroRestAdvancesImmediately) { Workout w = two(); w.steps[0].rest_s = 0; SessionEngine e; e.startWorkout(w, 1);
+  e.shot(true); e.shot(true); EXPECT_EQ(e.shot(true), SessionEngine::Event::StepDone); EXPECT_EQ(e.state(), SessionState::Active); EXPECT_EQ(e.snapshot().stepIndex, 1); }
+TEST(EngineWorkout, PauseDuringRestResumesRest) { SessionEngine e; e.startWorkout(two(), 1); e.shot(true); e.shot(true); e.shot(true);
+  e.pause(); e.tick(); EXPECT_EQ(e.snapshot().restRemaining_s, 10); e.resume(); EXPECT_EQ(e.state(), SessionState::Rest); }
+TEST(EngineWorkout, ChangeSpotRefusedInWorkout) { SessionEngine e; e.startWorkout(two(), 1); EXPECT_FALSE(e.changeSpot(Spot::LayupL)); }
+TEST(EngineRestore, ComesBackPaused) { SessionEngine a; Workout w = two(); a.startWorkout(w, 1); a.shot(true); a.tick();
+  SessionEngine b; ASSERT_TRUE(b.restore(a.session(), &w)); EXPECT_EQ(b.state(), SessionState::Paused);
+  EXPECT_TRUE(b.snapshot().flags & Snapshot::kResumable); b.resume(); EXPECT_EQ(b.state(), SessionState::Active);
+  EXPECT_FALSE(b.snapshot().flags & Snapshot::kResumable); EXPECT_EQ(b.snapshot().totalAttempts, 1); EXPECT_EQ(b.snapshot().stepCount, 2); }
+TEST(EngineRestore, WithoutWorkoutBecomesOpen) { SessionEngine a; a.startWorkout(two(), 1); a.shot(true);
+  SessionEngine b; ASSERT_TRUE(b.restore(a.session(), nullptr)); EXPECT_EQ(b.snapshot().mode, 0); b.resume(); EXPECT_TRUE(b.changeSpot(Spot::LayupL)); }
+TEST(EngineRestore, EndedRefused) { SessionEngine a; a.startOpen(Spot::Ft, 1); a.end(); SessionEngine b; EXPECT_FALSE(b.restore(a.session(), nullptr)); }

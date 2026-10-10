@@ -20,19 +20,96 @@ bool SessionEngine::startOpen(Spot spot, uint32_t nowUnix)
     return true;
 }
 
-// Workout paths: Task 4.
-bool SessionEngine::startWorkout(const Workout&, uint32_t) { return false; }
-bool SessionEngine::restore(const Session&, const Workout*) { return false; }
-bool SessionEngine::skipRest() { return false; }
-bool SessionEngine::extendRest(uint16_t) { return false; }
-SessionEngine::Event SessionEngine::completeStep() { return Event::None; }
-void SessionEngine::advanceStep() {}
+bool SessionEngine::startWorkout(const Workout& w, uint32_t nowUnix)
+{
+    if (w.stepCount == 0 || w.stepCount > kMaxSteps) return false;
+    if (!startOpen(static_cast<Spot>(w.steps[0].spot), nowUnix)) return false;
+    mWorkout           = w;
+    mHasWorkout        = true;
+    mSession.workoutId = w.id;
+    return true;
+}
+
+bool SessionEngine::restore(const Session& saved, const Workout* w)
+{
+    const SessionState s = static_cast<SessionState>(saved.state);
+    if (s != SessionState::Active && s != SessionState::Paused && s != SessionState::Rest) return false;
+    // Reject records that would index outside the shot log or step list.
+    if (saved.count > kMaxShots || saved.stepStartCount > saved.count) return false;
+    if (w && (w->stepCount == 0 || w->stepCount > kMaxSteps || saved.stepIndex >= w->stepCount)) return false;
+
+    mSession = saved;
+    if (w) {
+        mWorkout    = *w;
+        mHasWorkout = true;
+    } else {
+        mHasWorkout           = false;
+        mSession.workoutId    = 0;
+        mSession.workoutDone  = 0;
+    }
+    mSession.pausedFrom = (s == SessionState::Paused) ? saved.pausedFrom : saved.state;
+    mSession.state      = st(SessionState::Paused);
+    mResumable          = true;
+    mLastStep           = StepResult{};
+    mLastHr             = 0;
+    return true;
+}
+
+bool SessionEngine::skipRest()
+{
+    if (state() != SessionState::Rest) return false;
+    advanceStep();
+    return true;
+}
+
+bool SessionEngine::extendRest(uint16_t seconds)
+{
+    if (state() != SessionState::Rest) return false;
+    const uint32_t r = static_cast<uint32_t>(mSession.restRemaining_s) + seconds;
+    mSession.restRemaining_s = static_cast<uint16_t>(r > UINT16_MAX ? UINT16_MAX : r);
+    return true;
+}
+
+SessionEngine::Event SessionEngine::completeStep()
+{
+    const uint8_t rest = step().rest_s;
+    mLastStep = { mSession.stepIndex, stepMakes(),
+                  static_cast<uint16_t>(mSession.count - mSession.stepStartCount), rest };
+    if (mSession.stepIndex + 1 >= mWorkout.stepCount) {
+        mSession.workoutDone = 1;
+        return Event::WorkoutDone;
+    }
+    if (rest > 0) {
+        mSession.state           = st(SessionState::Rest);
+        mSession.restRemaining_s = rest;
+    } else {
+        advanceStep();
+    }
+    return Event::StepDone;
+}
+
+void SessionEngine::advanceStep()
+{
+    ++mSession.stepIndex;
+    mSession.spot            = step().spot;
+    mSession.stepStartCount  = mSession.count;
+    mSession.stepElapsed_s   = 0;
+    mSession.restRemaining_s = 0;
+    mSession.state           = st(SessionState::Active);
+}
 
 SessionEngine::Event SessionEngine::shot(bool made)
 {
     if (state() != SessionState::Active || mSession.count >= kMaxShots) return Event::None;
     mSession.shots[mSession.count++] = { mSession.spot, static_cast<uint8_t>(made ? 1 : 0),
                                          static_cast<uint16_t>(mSession.elapsed_s) };
+    if (!mHasWorkout || mSession.workoutDone) return Event::None;
+
+    const Goal& g = step().goal;
+    const uint16_t attempts = mSession.count - mSession.stepStartCount;
+    if ((g.type == static_cast<uint8_t>(GoalType::Attempts) && attempts >= g.value) ||
+        (g.type == static_cast<uint8_t>(GoalType::Makes) && stepMakes() >= g.value))
+        return completeStep();
     return Event::None;
 }
 
@@ -63,6 +140,7 @@ bool SessionEngine::resume()
 {
     if (state() != SessionState::Paused) return false;
     mSession.state = mSession.pausedFrom;
+    mResumable     = false;
     return true;
 }
 
@@ -72,10 +150,18 @@ SessionEngine::Event SessionEngine::tick()
     case SessionState::Active:
         ++mSession.elapsed_s;
         ++mSession.stepElapsed_s;
+        if (mHasWorkout && !mSession.workoutDone &&
+            step().goal.type == static_cast<uint8_t>(GoalType::Time) &&
+            mSession.stepElapsed_s >= step().goal.value)
+            return completeStep();
         break;
     case SessionState::Rest:
         ++mSession.elapsed_s;
         if (mSession.restRemaining_s > 0) --mSession.restRemaining_s;
+        if (mSession.restRemaining_s == 0) {
+            advanceStep();
+            return Event::RestOver;
+        }
         break;
     default:
         break;
@@ -126,6 +212,14 @@ Snapshot SessionEngine::snapshot() const
     s.mode      = mHasWorkout ? 1 : 0;
     s.spot      = mSession.spot;
     s.stepIndex = mSession.stepIndex;
+    s.nextSpot  = mSession.spot;
+    if (mHasWorkout) {
+        s.stepCount = mWorkout.stepCount;
+        s.goalType  = step().goal.type;
+        s.goalValue = step().goal.value;
+        if (state() == SessionState::Rest && mSession.stepIndex + 1 < mWorkout.stepCount)
+            s.nextSpot = mWorkout.steps[mSession.stepIndex + 1].spot;
+    }
 
     const uint16_t n = mSession.count < kMaxShots ? mSession.count : kMaxShots;
     for (uint16_t i = 0; i < n; ++i) {
