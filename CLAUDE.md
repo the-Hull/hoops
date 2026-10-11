@@ -357,7 +357,7 @@ Final review fixes (2026-10-11): pull-based history paging (`GET_HISTORY{offset,
 GET_SETTINGS + Settings "Loading…" guard, first-page-only requests from Home/Settings, WORKOUT_SAVED sent alone,
 evicted session files removed after the index write; 90 host tests, self-test 117/117, crash-resume 9/9,
 full-store phase 3 8/8 (Dark and Light); GUI data+bss 162 012 B, service 20 032 B.
-Tagged `apps-v0.0.1` on `main` 73f0e22 (MVP + v2), the first versioned build.
+Tagged `apps-v0.0.1` on `main` 0363148 (MVP + v2), the first versioned build.
 
 0.1.0 (2026-10-11, branch `release-0.1.0`, Tasks 1–4): 15 preset workouts (50–200 shots, the five drills in
 S/L sizes (Game Shots has S and M) + Warm-up 50, FT Sets 5x10, Elbows & Key, Corner 3s, Pro Session 200)
