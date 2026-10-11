@@ -294,7 +294,9 @@ function workoutIssues(w, index, all) {
   if (name.length === 0) block("The name is empty.");
   const nb = nameBytes(w.name);
   if (nb > LIMITS.NAME_BYTES) block(`The name is ${nb} bytes long; the watch keeps at most ${LIMITS.NAME_BYTES}.`);
-  if (!isAscii(w.name)) warn("The name has characters outside plain letters, digits and punctuation; the watch font cannot draw them.");
+  // A control character (a NUL above all) would cut the name short on the watch: never export one.
+  if (/[\x00-\x1f\x7f]/.test(w.name)) block("The name contains a control character; remove it.");
+  else if (!isAscii(w.name)) warn("The name has characters outside plain letters, digits and punctuation; the watch font cannot draw them.");
   if (name.length > 0 && all.some((o, j) => j !== index && o.name.trim() === name)) warn("Another workout has the same name.");
   if (w.steps.length === 0) block("Add at least one step.");
   if (w.steps.length > LAYOUT.MAX_STEPS) block(`${w.steps.length} steps; a workout holds at most ${LAYOUT.MAX_STEPS}. Delete ${w.steps.length - LAYOUT.MAX_STEPS}.`);
