@@ -47,7 +47,7 @@ Two processes, as every UNA app:
   `last[13]`/`best[13]` records via `recordSpots()`), `Settings` (defaults, `valid()`), `Serializer`.
 - **IPC** (`Software/Libs/Header/Commands.hpp`): padding-free POD messages. `0x01xx` GUI → Service
   (START_OPEN 0x0101 … GET_HISTORY 0x0110, SET_SETTINGS 0x0111, GET_SPOT_STATS 0x0112, CLEAR_HISTORY 0x0113,
-  GET_SETTINGS 0x0114), `0x02xx` Service → GUI (SNAPSHOT, UNDO_RESULT, STEP_DONE, WORKOUT_ITEM, RESULTS,
+  GET_SETTINGS 0x0114, RESET_WORKOUTS 0x0115), `0x02xx` Service → GUI (SNAPSHOT, UNDO_RESULT, STEP_DONE, WORKOUT_ITEM, RESULTS,
   HISTORY, LOCAL_TIME, SAVED, WORKOUT_SAVED 0x0209, SETTINGS 0x020A, SPOT_STATS 0x020B). A RESULTS reply with
   `sessionId 0` means "none"; `GET_RESULTS{0}` = the session just ended. History is **pull-based**:
   `GET_HISTORY{offset, seq, pad[2]}` → exactly one HISTORY page `{total, offset, count, seq, items[5]}` (rows
@@ -55,14 +55,18 @@ Two processes, as every UNA app:
   `Model::requestHistory(all)` starts a stream (`++seq`, offset 0) and drops pages with another seq or offset;
   with `all` it asks for the next page from each one that arrives (one HISTORY in flight). Home, Settings and
   Results-after-a-session ask for the first page only (it carries `total`); History and Results-from-History
-  pull all of it. History asks for the user workouts first and starts its stream from `onWorkouts()`.
+  pull all of it. History asks for the user workouts first and starts its stream from `onWorkouts()`;
+  Settings asks for its first page first and, if the Model holds no list, the workouts from `onHistory()`.
   SETTINGS (`score::Settings`) goes out on GUI start before LOCAL_TIME and the first snapshot, after every
   SET_SETTINGS (an invalid one is ignored and answered with the settings in force) and, with LOCAL_TIME, in
   answer to GET_SETTINGS (the Model sends it on resume while it has no SETTINGS; Settings rows read "Loading…"
   and SELECT does nothing until then). SPOT_STATS = `SpotStat last[13], best[13]`. CLEAR_HISTORY writes the
   empty index first, then removes the indexed `.bin`/`.csv` files, then sends SPOT_STATS; the Model follows it
   with a GET_HISTORY (the empty page). SAVE_WORKOUT is answered by WORKOUT_SAVED alone; the Model then sends
-  GET_WORKOUTS (at most one list in flight: a repeat within 1 s is skipped).
+  GET_WORKOUTS (at most one list in flight: a repeat within 1 s is skipped). RESET_WORKOUTS (empty) empties
+  the `WorkoutStore` and saves `workouts.bin` — refused (logged, no change) while a user workout (id ≥ 100)
+  runs; the presets are code and stay — and is answered with the workout list alone (one `WORKOUT_ITEM{0,0}`
+  when empty); `Model::resetWorkouts()` counts that reply as the list in flight.
 - **Storage** (app directory; simulator: `Software/Output/`). Every `.bin` file = 12-byte header {magic, size,
   FNV-1a checksum} + the raw POD:
   - `workouts.bin` ('HWK1', `WorkoutStore`), `settings.bin` ('HST1', `score::Settings`, 12 B; missing or
@@ -90,8 +94,8 @@ Two processes, as every UNA app:
   court, categories, highlights, trend), History (every indexed session, up to 50, rows appear as pages
   arrive), Settings.
 - LVGL pool `LV_MEM_SIZE` 56 KB (both CMake files): peak 23 640 B ≈ 23.1 KB in the full self-test walk
-  (SpotPicker → Active change-spot switch). RAM (`arm-none-eabi-size`): GUI data+bss 162 020 B ≈ 158 KB of
-  600 KB, service 20 036 B ≈ 20 KB of 500 KB; `.uapp` 310 216 B (0.1.0 branch build).
+  (SpotPicker → Active change-spot switch). RAM (`arm-none-eabi-size`): GUI data+bss 162 044 B ≈ 158 KB of
+  600 KB, service 20 036 B ≈ 20 KB of 500 KB; `.uapp` 311 316 B (0.2.0 Task 1 build).
 
 ## Environment
 
@@ -134,7 +138,7 @@ cd Software/Apps/LVGL-GUI/simulator
 cmake -S . -B build-selftest -G Ninja -DCMAKE_CXX_FLAGS=-DHOOPS_SELFTEST=1 && cmake --build build-selftest
 rm -f ../../../Output/workouts.bin ../../../Output/current.bin ../../../Output/settings.bin   # fresh store/settings
 (cd build/bin && SDL_VIDEODRIVER=dummy timeout 400 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
-#   full walk: "done: 120 checks passed, 0 failed" (ends with Settings and settings.bin back at the defaults)
+#   full walk: "done: 122 checks passed, 0 failed" (ends with Settings and settings.bin back at the defaults)
 # Store screenshots: with HOOPS_SHOTS_DIR (an existing dir, absolute path: the cwd is build/bin) the walk
 # writes 16 frames as <name>.ppm (240x240, spec §8); tools/ppm2png.py makes the 480x480 PNGs.
 SHOTS=$(realpath ../../../..)/shots && mkdir -p $SHOTS     # shots/ is git-ignored
@@ -148,7 +152,9 @@ SHOTS=$(realpath ../../../..)/shots && mkdir -p $SHOTS     # shots/ is git-ignor
 # Full store (phase 3): Tests/Host's hoops-seed-index (built with the host tests) writes 50 indexed sessions
 # with their files and 10 user workouts (add --light for a settings.bin with the Light scheme: the start-up
 # rebuild). Checks Home's first page + footer, settings and date, History "Loading…" then all 50 rows, the
-# oldest row's Results, Settings "50 sessions" (8 checks). It replaces the store's sessions: back it up first.
+# oldest row's Results, Settings "Deletes 10 custom" + "50 sessions", Restore workouts (confirm, toast, 0 user
+# workouts), Workouts = 15 presets + "+ New workout" (12 checks). It replaces the store's sessions and deletes
+# its workouts: back it up first.
 rm -rf ../../../Output/sessions ../../../Output/workouts.bin ../../../Output/current.bin ../../../Output/settings.bin
 ../../../../build-host/hoops-seed-index ../../../Output            # or: … ../../../Output --light
 (cd build/bin && HOOPS_SELFTEST_PHASE=3 SDL_VIDEODRIVER=dummy timeout 60 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
@@ -274,7 +280,10 @@ and `--check`, zips) → upload `dist/Hoops-<ver>.zip` → Version → Upload Ne
   (On · Off; off = the HR sensor is never connected) · Colour scheme (Dark · Light) · CSV export (On · Off) ·
   Clear history ("N sessions" / "1 session", "Nothing to clear", "Loading…" before the first HISTORY page;
   first SELECT → "SELECT again to confirm" for 3 s, second SELECT → CLEAR_HISTORY, toast "History cleared",
-  "0 sessions") · About ("Hoops v<BUILD_VERSION>", simulator "Hoops dev").
+  "0 sessions") · Restore workouts ("Deletes N custom", "No custom workouts", "Not while running" while a
+  user workout is in progress, "Loading…" until the workout list is in — SELECT does nothing in those three;
+  first SELECT → "SELECT again to confirm" for 3 s, second SELECT → RESET_WORKOUTS, toast "Custom workouts
+  deleted"; the 15 presets stay) · About ("Hoops v<BUILD_VERSION>", simulator "Hoops dev").
 - Results via SELECT: 1 court map (UP/DOWN move between spots; caption "3PT · Top 5/10 · 50 %") → 2 categories
   → 3 highlights (STREAK names the spot) → 4 trend. BACK = done (already saved).
 - Heart rate is counted in Active and Rest, not while paused: the HR sensor is disconnected on PAUSE (and for a
@@ -360,6 +369,11 @@ crash-resume 9/9, full-store phase 3 8/8 (Dark and Light); LVGL pool peak 23 640
 service 20 036 B; `Hoops_0.0.1-7-92714bf.uapp` 310 216 B; builder import → download of
 `reference-workouts.bin` and of a watch-written `workouts.bin` byte-identical (page code run under Node).
 `apps-v0.1.0` is tagged on `main` after the merge (→ `Hoops_0.1.0.uapp`, `appVersion` 0.1.0).
+
+0.2.0 (in progress, branch `release-0.2.0`): Task 1 — Settings "Restore workouts" (13 rows; RESET_WORKOUTS
+0x0115 deletes every custom workout after a two-SELECT confirm). Verified (2026-10-11): 92 host tests;
+self-test 122/122, crash-resume 9/9, full-store phase 3 12/12 (Dark and Light); LVGL pool peak 23 640 B;
+GUI data+bss 162 044 B, service 20 036 B.
 
 Known limitations / next:
 - A Light-scheme user sees one dark frame at GUI start (the GUI starts Dark until SETTINGS arrives, ~100 ms).

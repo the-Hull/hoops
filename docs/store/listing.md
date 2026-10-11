@@ -69,7 +69,7 @@ reads better in bright sunshine), light or strong haptics or none, and whether h
 - Fifteen built-in workouts from 50 to 200 shots — five drills in small and large sizes plus warm-up, free-throw sets,
   corners, elbows and a 200-shot session
 - Up to ten custom workouts (up to eight steps each), built on the watch or in the offline workout builder on
-  your computer
+  your computer; one setting deletes them all to start over from the built-in fifteen
 - Goals by attempts, makes or time, with a rest countdown (+15 s or skip)
 - Undo, pause, resume after a restart
 - Results: court map, categories, highlights, five-session trend

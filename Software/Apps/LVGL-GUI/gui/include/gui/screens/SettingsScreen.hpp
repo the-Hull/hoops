@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    SettingsScreen.hpp
- * @brief   The user settings: twelve rows, SELECT steps a row to its next value.
+ * @brief   The user settings: thirteen rows, SELECT steps a row to its next value.
  *
  * Spec v2 §2.4. Header "SETTINGS", ListMenu::workoutsGeometry() (circular):
  * line 1 the setting's name, line 2 (the selected row only) its value.
@@ -18,6 +18,11 @@
  * show) or "Nothing to clear"; the first SELECT asks "SELECT again to
  * confirm" for 3 s, a second one within them sends CLEAR_HISTORY, and the
  * empty HISTORY page that follows shows the toast "History cleared".
+ * Restore workouts: line 2 "Deletes N custom" (Model::userWorkoutCount();
+ * the list, if not held, is requested once the history page is in), "No custom workouts", "Not while running"
+ * (a user workout is in progress) or "Loading…"; the same two-SELECT confirm
+ * sends RESET_WORKOUTS, and the empty list that follows (onWorkouts()) shows
+ * the toast "Custom workouts deleted". The presets are code and stay.
  * About: "Hoops v<BUILD_VERSION>" ("Hoops dev" without the define).
  ******************************************************************************
  */
@@ -48,6 +53,7 @@ public:
 
     void onSettings() override;
     void onHistory() override;
+    void onWorkouts() override;
     void onSuspend() override;
 
 protected:
@@ -56,7 +62,7 @@ protected:
 private:
     enum Row : uint8_t {
         kGoalType, kGoalValue, kRest, kOpenTarget, kHoldDown, kHaptics, kBacklight, kHeartRate, kScheme, kCsv,
-        kClear, kAbout, kRowCount
+        kClear, kReset, kAbout, kRowCount
     };
 
     static constexpr uint32_t kConfirmMs = 3000;
@@ -64,6 +70,9 @@ private:
     /// Step the selected row to its next value and send the settings.
     void change(uint8_t row);
     void clearHistory();
+    void resetWorkouts();
+    /// A user workout is in progress: the service would refuse RESET_WORKOUTS.
+    bool customRunning() const;
     /// Rewrite every row's value text and redraw the menu.
     void refresh();
     void stopConfirm();
@@ -78,8 +87,10 @@ private:
     ListMenu::Item  mItems[kRowCount]     = {};
     char            mValue[kRowCount][28] = {};
     lv_timer_t*     mConfirmTimer         = nullptr;   ///< the "SELECT again" window
+    uint8_t         mConfirmRow           = kClear;    ///< the row it belongs to (kClear / kReset)
     bool            mAwaitClear           = false;     ///< CLEAR_HISTORY sent, empty page not yet in
     bool            mCleared              = false;     ///< cleared here: "0 sessions", not "Nothing to clear"
+    bool            mAwaitReset           = false;     ///< RESET_WORKOUTS sent, its list not yet in
 };
 
 #endif // SETTINGS_SCREEN_HPP

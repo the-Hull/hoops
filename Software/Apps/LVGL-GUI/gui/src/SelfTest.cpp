@@ -706,6 +706,18 @@ bool stCleared(const Model& m)
         && sClearedId != 0 && !csvExists(sClearedId) && !sessionFileExists(sClearedId, "bin");
 }
 
+// Restore workouts: the walk's custom workout is gone by now, so the row has
+// nothing to delete and SELECT leaves it as it is (no confirm).
+bool stResetNone(const Model& m)
+{
+    return settingsRow("Restore workouts", "No custom workouts") && m.workoutsLoaded()
+        && m.userWorkoutCount() == 0;
+}
+bool stResetUnchanged(const Model& m)
+{
+    return stResetNone(m) && !onScreenLabel("SELECT again to confirm");
+}
+
 bool stTarget25(const Model& m) { return settingsRow("Open target", "25 shots") && m.settings().openTarget == 25; }
 bool streak5(const Model& m)
 {
@@ -1224,6 +1236,10 @@ const Step kSteps[] = {
     {  400, stClearConfirm, "Clear history: SELECT again to confirm",
                              '3', "Settings: SELECT again -> CLEAR_HISTORY" },
     {  800, stCleared, "History cleared: toast, 0 sessions, the newest session's .bin and .csv gone",
+                             '2', "Settings: DOWN (Restore workouts)" },
+    {  400, stResetNone, "Restore workouts: No custom workouts",
+                             '3', "Settings: SELECT Restore workouts (nothing to delete)" },
+    {  400, stResetUnchanged, "Restore workouts: SELECT changed nothing (no confirm)",
                              '2', "Settings: DOWN (About)" },
     {  300, nullptr, nullptr, '2', "Settings: DOWN (Goal type)" },
     {  300, nullptr, nullptr, '2', "Settings: DOWN (Goal value)" },
@@ -1514,10 +1530,32 @@ bool p3Clear50(const Model& m)
 {
     return settingsRow("Clear history", "50 sessions") && m.historyTotal() == score::kIndexCapacity;
 }
+bool p3ResetRow(const Model& m)
+{
+    return settingsRow("Restore workouts", "Deletes 10 custom") && m.userWorkoutCount() == score::kMaxUserWorkouts;
+}
+bool p3ResetConfirm(const Model& m)
+{
+    return settingsRow("Restore workouts", "SELECT again to confirm") && m.userWorkoutCount() == score::kMaxUserWorkouts;
+}
+bool p3ResetDone(const Model& m)
+{
+    LOG_INFO("p3 reset: %u workouts, loaded %d\n", m.userWorkoutCount(), m.workoutsLoaded());
+    return onSettings() && visibleLabel("Custom workouts deleted") && m.workoutsLoaded() && m.userWorkoutCount() == 0
+        && menuSelected("No custom workouts");
+}
+// Workouts opens past its last item: the list clamps to "+ New workout",
+// which onHide stores in workoutsIndex (p3End: index 15 = 15 presets + 1).
+void selectPastLastWorkout() { sModel->workoutsIndex = 0xFF; }
+bool p3WorkoutsPresets(const Model& m)
+{
+    return onWorkouts(m) && m.workoutsLoaded() && m.userWorkoutCount() == 0 && menuSelected("+ New workout");
+}
 bool p3End(const Model& m)
 {
+    LOG_INFO("p3 end: workoutsIndex %u\n", m.workoutsIndex);
     return onHome(m) && m.hasSettings() && schemeApplied(m) && m.historyTotal() == score::kIndexCapacity
-        && onScreenLabel("Last - ", 0, true);
+        && onScreenLabel("Last - ", 0, true) && m.workoutsIndex == score::kPresetCount;
 }
 
 const Step kPhase3[] = {
@@ -1538,10 +1576,22 @@ const Step kPhase3[] = {
     {  300, nullptr, nullptr, '3', "Home: SELECT -> Settings" },
     {  800, p3Settings, "phase 3: Settings loaded (hasSettings, no Loading...)",
                              '1', "Settings: UP (About)" },
-    {  300, nullptr, nullptr, '1', "Settings: UP (Clear history)" },
+    {  300, nullptr, nullptr, '1', "Settings: UP (Restore workouts)" },
+    {  500, p3ResetRow, "phase 3: Settings Restore workouts reads Deletes 10 custom",
+                             '1', "Settings: UP (Clear history)" },
     {  500, p3Clear50, "phase 3: Settings Clear history reads 50 sessions",
+                             '2', "Settings: DOWN (Restore workouts)" },
+    {  300, nullptr, nullptr, '3', "Settings: SELECT Restore workouts -> confirm" },
+    {  400, p3ResetConfirm, "phase 3: Restore workouts: SELECT again to confirm",
+                             '3', "Settings: SELECT again -> RESET_WORKOUTS" },
+    {  800, p3ResetDone, "phase 3: Custom workouts deleted: toast, 0 user workouts, No custom workouts",
                              '4', "Settings: BACK -> Home" },
-    {  800, p3End, "phase 3: Home again with the footer and the scheme kept",
+    {  800, nullptr, nullptr, '1', "Home: UP (History)" },
+    {  300, nullptr, nullptr, '1', "Home: UP (Workouts)", &selectPastLastWorkout },
+    {  300, nullptr, nullptr, '3', "Home: SELECT -> Workouts" },
+    {  800, p3WorkoutsPresets, "phase 3: Workouts lists the presets only, + New workout last",
+                             '4', "Workouts: BACK -> Home" },
+    {  800, p3End, "phase 3: Home again with the footer and the scheme kept; Workouts had 15 presets + New",
                              '4', "Home: BACK -> exit app" },
 };
 

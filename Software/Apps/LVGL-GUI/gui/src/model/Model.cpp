@@ -73,6 +73,17 @@ void Model::requestSnapshot()              { SDK::send_msg<CustomMessage::GetSna
 void Model::saveWorkout(const score::Workout& w) { SDK::send_msg<CustomMessage::SaveWorkout>(mKernel, w); }
 void Model::deleteWorkout(uint8_t id)      { SDK::send_msg<CustomMessage::DeleteWorkout>(mKernel, id); }
 
+void Model::resetWorkouts()
+{
+    // The reply is the workout list: count it as the one in flight, so a
+    // requestWorkouts() in the same frame doesn't double the burst.
+    mWorkoutsLoaded  = false;
+    mWorkoutsPending = true;
+    mWorkoutsAskedAt = mFrame;
+    mWorkoutsRetried = false;
+    SDK::send_msg<CustomMessage::ResetWorkouts>(mKernel);
+}
+
 void Model::requestWorkouts()
 {
     mWorkoutsLoaded = false;   // the list already held stays readable meanwhile

@@ -60,6 +60,9 @@ public:
     void requestWorkouts();               ///< onWorkouts() once the list is in
     void saveWorkout(const score::Workout& w);
     void deleteWorkout(uint8_t id);
+    /// Delete every user workout (refused by the service while one runs); the
+    /// list that follows (one empty item on success) -> onWorkouts().
+    void resetWorkouts();
     void requestResults(uint32_t sessionId);   ///< 0 = the session just ended
     /// Forget the results held, so the Results screen requests fresh ones.
     void clearResults() { mHasResults = false; }

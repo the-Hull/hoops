@@ -49,6 +49,7 @@ constexpr SDK::MessageType::Type SET_SETTINGS   = 0x0111;
 constexpr SDK::MessageType::Type GET_SPOT_STATS = 0x0112;
 constexpr SDK::MessageType::Type CLEAR_HISTORY  = 0x0113;
 constexpr SDK::MessageType::Type GET_SETTINGS   = 0x0114;
+constexpr SDK::MessageType::Type RESET_WORKOUTS = 0x0115;
 
 // Service --> GUI
 constexpr SDK::MessageType::Type SNAPSHOT      = 0x0201;
@@ -184,6 +185,12 @@ struct GetSettings : public SDK::MessageBase {
     GetSettings() : SDK::MessageBase(GET_SETTINGS) {}
 };
 
+/// Delete every user workout (the presets are code and stay). Refused while a user workout runs.
+/// Either way the service answers with the workout list (one empty WORKOUT_ITEM once all are gone).
+struct ResetWorkouts : public SDK::MessageBase {
+    ResetWorkouts() : SDK::MessageBase(RESET_WORKOUTS) {}
+};
+
 // ---------------------------------------------------------------- Service --> GUI
 
 struct SnapshotMsg : public SDK::MessageBase {
@@ -291,6 +298,7 @@ static_assert(sizeof(SetSettings)   <= 256, "SetSettings exceeds the message blo
 static_assert(sizeof(GetSpotStats)  <= 256, "GetSpotStats exceeds the message block");
 static_assert(sizeof(ClearHistory)  <= 256, "ClearHistory exceeds the message block");
 static_assert(sizeof(GetSettings)   <= 256, "GetSettings exceeds the message block");
+static_assert(sizeof(ResetWorkouts) <= 256, "ResetWorkouts exceeds the message block");
 static_assert(sizeof(SnapshotMsg)   <= 256, "SnapshotMsg exceeds the message block");
 static_assert(sizeof(UndoResult)    <= 256, "UndoResult exceeds the message block");
 static_assert(sizeof(StepDone)      <= 256, "StepDone exceeds the message block");
@@ -328,6 +336,7 @@ static_assert(payloadIs<LocalTime>(sizeof(Clock)) && payloadIs<Saved>(4) && payl
 static_assert(payloadIs<SetSettings>(12) && payloadIs<SettingsMsg>(12), "implicit padding");
 static_assert(payloadIs<GetSpotStats>(0) && payloadIs<ClearHistory>(0) && payloadIs<GetSettings>(0),
               "implicit padding");
+static_assert(payloadIs<ResetWorkouts>(0), "implicit padding");
 static_assert(payloadIs<SpotStats>(104), "implicit padding");
 static_assert(sizeof(score::SpotStat) == 4 && std::has_unique_object_representations<score::SpotStat>::value,
               "SpotStat: no padding");

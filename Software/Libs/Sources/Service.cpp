@@ -280,6 +280,19 @@ void Service::handleMessage(SDK::MessageBase* msg)
             sendWorkouts();
         } break;
 
+        case CustomMessage::RESET_WORKOUTS:
+            if (mEngine.isActive() && mEngine.session().workoutId >= score::kFirstUserWorkoutId) {
+                LOG_WARNING("RESET_WORKOUTS refused: custom workout %u is running\n", mEngine.session().workoutId);
+            } else {
+                const unsigned removed = mWorkouts.count;
+                mWorkouts = score::WorkoutStore{};   // the presets are code: only the user's go
+                if (!mStorage.saveWorkouts(mWorkouts))
+                    LOG_WARNING("RESET_WORKOUTS: workouts.bin not saved\n");
+                LOG_INFO("custom workouts removed (%u)\n", removed);
+            }
+            sendWorkouts();   // the only reply: one message when empty, <= 10 otherwise
+            break;
+
         case CustomMessage::GET_RESULTS:
             sendResults(static_cast<CustomMessage::GetResults*>(msg)->sessionId);
             break;

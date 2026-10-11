@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    SettingsScreen.cpp
- * @brief   The user settings: twelve rows, SELECT steps a row to its next value.
+ * @brief   The user settings: thirteen rows, SELECT steps a row to its next value.
  ******************************************************************************
  */
 
@@ -22,7 +22,8 @@ constexpr int32_t kHeaderY = 49;
 
 constexpr const char* kNames[] = {
     "Goal type", "Goal value", "Rest", "Open target", "Hold DOWN", "Haptics",
-    "Backlight on shot", "Heart rate", "Colour scheme", "CSV export", "Clear history", "About",
+    "Backlight on shot", "Heart rate", "Colour scheme", "CSV export", "Clear history",
+    "Restore workouts", "About",
 };
 
 constexpr uint16_t kOpenTargets[] = { 0, 25, 50, 100, 200 };
@@ -55,7 +56,7 @@ const char* onOff(uint8_t v)
 
 } // namespace
 
-static_assert(sizeof(kNames) / sizeof(kNames[0]) == 12, "one name per row");
+static_assert(sizeof(kNames) / sizeof(kNames[0]) == 13, "one name per row");
 
 SettingsScreen::SettingsScreen(Model& model)
     : Screen(model)
@@ -87,7 +88,10 @@ void SettingsScreen::build()
 
 void SettingsScreen::onShow()
 {
-    mModel.requestHistory(false);   // the first page carries the total: the Clear history count
+    // The first page carries the total (the Clear history count); the user
+    // workouts (the Restore workouts count) follow it in onHistory(): never
+    // both replies in one frame (10 items + the page overflow the GUI queue).
+    mModel.requestHistory(false);
     if (!mModel.hasSettings()) {
         mModel.requestSettings();   // SELECT waits for them (change())
     }
@@ -137,7 +141,7 @@ void SettingsScreen::refresh()
     }
 
     const uint8_t total = mModel.historyTotal();
-    if (mConfirmTimer) {
+    if (mConfirmTimer && mConfirmRow == kClear) {
         text(kClear, "SELECT again to confirm");
     } else if (!mModel.hasHistory()) {
         text(kClear, "Loading\xE2\x80\xA6");
@@ -145,6 +149,18 @@ void SettingsScreen::refresh()
         put(kClear, total == 1 ? "%u session" : "%u sessions", total);
     } else {
         text(kClear, "Nothing to clear");
+    }
+    const uint8_t custom = mModel.userWorkoutCount();
+    if (mConfirmTimer && mConfirmRow == kReset) {
+        text(kReset, "SELECT again to confirm");
+    } else if (!mModel.workoutsLoaded()) {
+        text(kReset, "Loading\xE2\x80\xA6");
+    } else if (customRunning()) {
+        text(kReset, "Not while running");
+    } else if (custom == 0) {
+        text(kReset, "No custom workouts");
+    } else {
+        put(kReset, "Deletes %u custom", custom);   // "1 custom" reads as well as "3 custom"
     }
     text(kAbout, kAboutText);
 
@@ -178,6 +194,7 @@ void SettingsScreen::change(uint8_t row)
         case kScheme:     s.scheme          = cycle(s.scheme, 2); break;
         case kCsv:        s.csvExport       = s.csvExport ? 0 : 1; break;
         case kClear:      clearHistory(); return;
+        case kReset:      resetWorkouts(); return;
         default:          return;   // About
     }
     // A scheme change rebuilds this screen (asynchronously) in the new palette.
@@ -190,7 +207,9 @@ void SettingsScreen::clearHistory()
     if (mAwaitClear || !mModel.hasHistory() || mModel.historyTotal() == 0) {
         return;
     }
-    if (!mConfirmTimer) {
+    if (!mConfirmTimer || mConfirmRow != kClear) {
+        stopConfirm();
+        mConfirmRow   = kClear;
         mConfirmTimer = lv_timer_create(&SettingsScreen::confirmTimerCb, kConfirmMs, this);
         refresh();
         return;
@@ -198,6 +217,29 @@ void SettingsScreen::clearHistory()
     stopConfirm();
     mAwaitClear = true;
     mModel.clearHistory();   // the empty HISTORY page -> onHistory()
+    refresh();
+}
+
+bool SettingsScreen::customRunning() const
+{
+    return mModel.sessionRunning() && mModel.snapshot().workoutId >= score::kFirstUserWorkoutId;
+}
+
+void SettingsScreen::resetWorkouts()
+{
+    if (mAwaitReset || !mModel.workoutsLoaded() || mModel.userWorkoutCount() == 0 || customRunning()) {
+        return;
+    }
+    if (!mConfirmTimer || mConfirmRow != kReset) {
+        stopConfirm();
+        mConfirmRow   = kReset;
+        mConfirmTimer = lv_timer_create(&SettingsScreen::confirmTimerCb, kConfirmMs, this);
+        refresh();
+        return;
+    }
+    stopConfirm();
+    mAwaitReset = true;
+    mModel.resetWorkouts();   // the (empty) list -> onWorkouts()
     refresh();
 }
 
@@ -253,10 +295,24 @@ void SettingsScreen::onSettings()
 
 void SettingsScreen::onHistory()
 {
+    if (!mModel.workoutsLoaded()) {
+        mModel.requestWorkouts();   // a list held is current: saves and deletes refresh it
+    }
     if (mAwaitClear && mModel.historyTotal() == 0) {
         mAwaitClear = false;
         mCleared    = true;
         mToast->show("History cleared");
+    }
+    refresh();
+}
+
+void SettingsScreen::onWorkouts()
+{
+    if (mAwaitReset) {
+        mAwaitReset = false;   // a refused reset (a race with a start) answers with the full list
+        if (mModel.userWorkoutCount() == 0) {
+            mToast->show("Custom workouts deleted");
+        }
     }
     refresh();
 }
