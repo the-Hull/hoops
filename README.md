@@ -6,7 +6,7 @@ Built on the [UNA SDK](https://github.com/UNAWatch/una-sdk) with the LVGL GUI.
 
 - Store text and screenshots: [docs/store/listing.md](docs/store/listing.md), [docs/store/previews/](docs/store/previews/)
 - Workout builder (offline web page that reads and writes the watch's `workouts.bin`):
-  [tools/workout-builder.html](tools/workout-builder.html)
+  https://the-hull.github.io/hoops/tools/workout-builder.html (source: [tools/workout-builder.html](tools/workout-builder.html))
 - Built-in workouts: [Software/Libs/score/presets.json](Software/Libs/score/presets.json)
 - Developer reference (architecture, build, self-test, decisions): [CLAUDE.md](CLAUDE.md)
 

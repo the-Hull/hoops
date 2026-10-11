@@ -46,7 +46,7 @@ reads and writes the watch's custom workout file:
 3. With Hoops closed, copy the file back to `Apps/Hoops/workouts.bin`, eject the watch and open Hoops.
 To start over from the fifteen built-in workouts, use Settings → Restore workouts on the watch (it asks twice
 and deletes every custom workout).
-<!-- Builder: tools/workout-builder.html in the source; link the hosted page here once it is published. -->
+The builder is at https://the-hull.github.io/hoops/tools/workout-builder.html (source: `tools/workout-builder.html`).
 
 **Mistakes happen.** Pressed the wrong button? The top left button undoes the last shot. The bottom left
 button pauses; from the pause menu you resume, end and save, or discard. If the watch restarts mid-session,
@@ -137,38 +137,3 @@ Screenshots from the watch display (240 × 240, shown at 2×), in `previews/`:
 | `step-builder.png` | Building a custom workout step on the watch |
 | `settings.png` | Settings: goals, target, haptics, scheme, CSV export and more |
 | `home-light.png` | Home in the light colour scheme |
-
----
-
-## Maintainer notes
-
-Not part of the listing.
-
-**App ID.** `store/app-manifest.json` `"id"` must equal `APP_ID` in `Software/Apps/Hoops-CMake/CMakeLists.txt`.
-Both hold the local placeholder `13F039C6FE024E86` until the real ID comes from apps.unawatch.com;
-`tools/package_store.sh` refuses to package while it is the placeholder (unless `--allow-placeholder`, for a
-test package) and when the two differ.
-
-**Icons.** `tools/make_icons.py` (run with `.venv/bin/python3`) regenerates `Resources/icon_60x60.png`,
-`Resources/icon_30x30.png` and `store/icon.png`. Previews come from the self-test's screenshots
-(`HOOPS_SHOTS_DIR` + `tools/ppm2png.py`, CLAUDE.md "Self-test"); regenerate them after any visible change.
-
-**Builder hosting.** The listing's builder paragraph needs a public URL. The page is one self-contained file
-(`tools/workout-builder.html`), so any static host works: GitHub Pages (push the repo, Settings → Pages →
-deploy from `main`, link `…/tools/workout-builder.html`), or any web space. Replace the HTML comment under the
-builder paragraph with the link before pasting the listing.
-
-**Submission checklist** — deadline **30 Oct 2026, 16:00 UK** (UNA App Competition):
-
-1. apps.unawatch.com → Add New → name "Hoops" + short description → copy the App ID.
-2. Put the App ID in both places: `APP_ID` in `Software/Apps/Hoops-CMake/CMakeLists.txt` and `"id"` in
-   `store/app-manifest.json`. Commit.
-3. Tag the build you submit (`git tag -a apps-vX.Y.Z -m "…"` on the commit with the real App ID; the SDK
-   reads only `apps-vX.Y.Z` tags — `apps-v0.0.1`, `apps-v0.1.0` and `apps-v0.2.0` exist) so the build version
-   (the `.uapp` name and `appVersion`) is clean; commits after a tag add `-<n>-<hash>`, a dirty tree `-dirty`.
-4. `export UNA_SDK=$HOME/una-sdk && tools/package_store.sh` → `dist/Hoops-<ver>.zip` (builds the watch app,
-   fills `binary`/`appVersion`, stamps and checks `minKernelVersion`).
-5. On the app page: Version → Upload New → upload the zip; paste the listing text above (description,
-   previews).
-6. Release → Confirm and Publish.
-7. Submit the competition form with the store link.
