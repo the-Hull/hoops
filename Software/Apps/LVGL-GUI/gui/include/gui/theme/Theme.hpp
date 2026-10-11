@@ -97,6 +97,11 @@ lv_obj_t* label(lv_obj_t* parent, Font f, const char* text, int32_t x, int32_t y
 /// values are. Screens that want a bigger header place a label themselves.
 lv_obj_t* header(lv_obj_t* parent, const char* text, int32_t yCentre, uint32_t color = kAccent);
 
+/// header() that stays within @p maxW px centred on the screen (x 120 -
+/// maxW/2 .. 120 + maxW/2): letter-spaced 2 px when that fits, else 0, else
+/// -1; a text too wide even then is cut with dots.
+lv_obj_t* headerFit(lv_obj_t* parent, const char* text, int32_t yCentre, int32_t maxW, uint32_t color = kAccent);
+
 /// Top of a label box in @p f whose text should be centred on @p yCentre.
 int32_t topFor(Font f, int32_t yCentre);
 

@@ -149,6 +149,22 @@ lv_obj_t* header(lv_obj_t* parent, const char* text, int32_t yCentre, uint32_t c
     return l;
 }
 
+lv_obj_t* headerFit(lv_obj_t* parent, const char* text, int32_t yCentre, int32_t maxW, uint32_t color)
+{
+    int32_t space = 2;
+    while (space > -1 && textWidth(Font::Regular14, text, space) > maxW) {
+        space = space == 2 ? 0 : -1;
+    }
+    lv_obj_t* l = label(parent, Font::Regular14, text, 120 - maxW / 2, topFor(Font::Regular14, yCentre), maxW,
+                        LV_TEXT_ALIGN_CENTER, color);
+    lv_obj_set_style_text_letter_space(l, space, LV_PART_MAIN);
+    if (textWidth(Font::Regular14, text, space) > maxW) {
+        lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);   // one line, cut with "..."
+        lv_obj_set_height(l, lv_font_get_line_height(font(Font::Regular14)));
+    }
+    return l;
+}
+
 void fmtDuration(char* out, size_t n, uint32_t seconds)
 {
     const unsigned h = static_cast<unsigned>(seconds / 3600u);

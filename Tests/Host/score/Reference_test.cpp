@@ -1,6 +1,7 @@
 // Format lock between the C++ store and tools/workout-builder.html: writes a known WorkoutStore to
 // reference-workouts.bin in the working directory (ctest runs in build-host). Importing it into the
-// builder and exporting again must give the same bytes (cmp).
+// builder and exporting again must give the same bytes (cmp). The expected bytes and checksum below
+// lock the C++ side: a layout change fails this test and points at the builder's LAYOUT.
 #include <gtest/gtest.h>
 #include <cstdio>
 #include <cstring>
@@ -47,6 +48,23 @@ TEST(Reference, WritesReferenceWorkoutStore) {
     EXPECT_EQ(buf[1], 0x57);   // 'W'
     EXPECT_EQ(buf[2], 0x4B);   // 'K'
     EXPECT_EQ(buf[3], 0x31);   // '1'
+
+    // Pin the layout, not just the size: a field reorder (e.g. rest_s before spot) keeps every
+    // static_assert happy but changes these bytes, and then the builder's LAYOUT must follow.
+    // Header {magic 'HWK1', size 704, FNV-1a 32 of the payload}, store count, then workout 0:
+    // id 100, "Ref Alpha" NUL-padded to 20, stepCount 3, step 0 {spot Top3, rest 15, Attempts, 0, 10}.
+    const uint8_t expected[] = {
+        0x48, 0x57, 0x4B, 0x31,  0xC0, 0x02, 0x00, 0x00,  0xE8, 0xD7, 0x01, 0x3E,   // header
+        0x02, 0x00, 0x00, 0x00,                                                     // count, pad
+        0x64, 'R', 'e', 'f', ' ', 'A', 'l', 'p', 'h', 'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0x03,                                                                       // stepCount
+        0x02, 0x0F, 0x00, 0x00, 0x0A, 0x00,                                         // step 0
+    };
+    static_assert(sizeof expected == 12 + 4 + 28, "header + count + workout 0 through step 0");
+    EXPECT_EQ(std::memcmp(buf, expected, sizeof expected), 0);
+    // The checksum covers all 704 payload bytes (both workouts, the zeroed rest): computed once
+    // from the encoder at 0.1.0 and hard-coded so any change to the bytes fails here.
+    EXPECT_EQ(ser::checksum(buf + sizeof(ser::Header), n - sizeof(ser::Header)), 0x3E01D7E8u);
 
     std::FILE* f = std::fopen("reference-workouts.bin", "wb");
     ASSERT_NE(f, nullptr);

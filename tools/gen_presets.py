@@ -14,8 +14,9 @@ presets.json is one array; list order = id order (1..N) = order on the watch:
   value  1..999 (shots, or seconds for time)
   rest   0..255 seconds after the step
 
-Validated: 1..99 presets (ids stay below the user-workout range); name 1..19 bytes (UTF-8) and unique; 1..8 steps; spot and goal known;
-value and rest in range; volume (sum of attempts and makes values) <= 400 (kMaxShots). An attempts
+Validated: 1..99 presets (ids stay below the user-workout range); name 1..19 characters, printable
+ASCII only (0x20..0x7E: the watch font has no other glyphs), and unique; 1..8 steps; spot and goal
+known; value and rest in range; volume (sum of attempts and makes values) <= 400 (kMaxShots). An attempts
 value above 50 only warns: the GUI then draws a progress ring instead of a segmented one.
 
 Writes Software/Libs/score/Presets.hpp (kPresetCount) and Presets.cpp (the kPresets table).
@@ -79,11 +80,13 @@ def validate(data):
         if not isinstance(name, str):
             raise PresetError(f"{where}: name must be a string")
         where = f"preset {i} ({name!r})"
+        bad = sorted({c for c in name if not 0x20 <= ord(c) <= 0x7E})
+        if bad:
+            raise PresetError(f"{where}: name may hold only printable ASCII (0x20..0x7E; the watch font "
+                              f"has no other glyphs), not {', '.join(repr(c) for c in bad)}")
         size = len(name.encode("utf-8"))
         if not 1 <= size <= MAX_NAME_BYTES:
             raise PresetError(f"{where}: name is {size} bytes, must be 1..{MAX_NAME_BYTES}")
-        if any(ord(c) < 0x20 or ord(c) == 0x7F for c in name):
-            raise PresetError(f"{where}: name contains a control character")
         if name in names:
             raise PresetError(f"{where}: duplicate name")
         names.add(name)

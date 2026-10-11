@@ -23,9 +23,13 @@ using Font = Theme::Font;
 
 // Layout, docs/mockup-layout.md §4 (vertical centres).
 constexpr int32_t kHeaderY      = 46;
+// The name header stays inside x 42..198, clear of the corner badges (x
+// 22-40 and 200-218 at y 46-64): long names lose their letter spacing.
+constexpr int32_t kHeaderMaxW   = 156;
 constexpr int32_t kRowY[4]      = { 69, 94, 119, 143 };
 // Five rows, 19 px apart, starting low enough that row 1 clears the SELECT
-// badge (centre y 55, r 9); the counts also stop short of it (x 200).
+// badge (centre y 55, r 9); the counts end at x 196, 4 px clear of the badge
+// at x 200.
 constexpr int32_t kDenseTop        = 68;
 constexpr int32_t kDensePitch      = 19;
 constexpr int32_t kDenseCountRight = 196;
@@ -105,7 +109,7 @@ bool WorkoutPreviewScreen::show()
         upper[i] = (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
     }
     upper[n] = '\0';
-    Theme::header(mContent, upper, kHeaderY);
+    Theme::headerFit(mContent, upper, kHeaderY, kHeaderMaxW);
 
     const uint8_t steps = w->stepCount < score::kMaxSteps ? w->stepCount : score::kMaxSteps;
     const uint8_t rows  = steps <= kMaxRows ? steps : kMaxRows;
@@ -170,6 +174,9 @@ void WorkoutPreviewScreen::edit()
         size_t n = strnlen(w->name, score::kNameLen);
         if (n > score::kNameLen - 3) {
             n = score::kNameLen - 3;
+        }
+        while (n > 0 && w->name[n - 1] == ' ') {
+            --n;   // "Around the World S" -> "Around the World 2", not "...World  2"
         }
         memset(d.name, 0, sizeof(d.name));
         memcpy(d.name, w->name, n);

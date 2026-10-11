@@ -8,7 +8,9 @@
  * time, and a START pill. SELECT starts it, DOWN edits it in the step
  * builder (a user workout in place; a preset as a new copy "<name> 2"),
  * BACK returns to the list. Up to four rows at the mockup's 25 px pitch,
- * five at 20 px; with more steps the fifth row reads "+ n more".
+ * five at 19 px from y 68 with the counts right-aligned at x 196; with more
+ * steps the fifth row reads "+ n more steps". The name header fits x 42..198
+ * (Theme::headerFit), clear of the corner badges.
  * A user workout whose list is still on its way (just saved in the step
  * builder: the one held may be stale) shows "Loading..." until onWorkouts().
  * START while a session is in progress shows a "Session in progress" toast.
