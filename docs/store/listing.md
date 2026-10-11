@@ -40,8 +40,12 @@ keep up to ten of them.
 reads and writes the watch's custom workout file:
 1. Connect the watch over USB and import `Apps/Hoops/workouts.bin` into the builder (skip this if you have no
    custom workouts yet; the file you download replaces the whole custom list).
-2. Add or edit workouts — spot, goal and rest for up to eight steps — and press Download workouts.bin.
+2. Add or edit workouts — spot, goal and rest for up to eight steps — and press Download workouts.bin. A
+   half-court map on each workout shows the spot of the step you are editing, just like the watch's spot
+   picker; click a spot on the map to move the step there.
 3. With Hoops closed, copy the file back to `Apps/Hoops/workouts.bin`, eject the watch and open Hoops.
+To start over from the fifteen built-in workouts, use Settings → Restore workouts on the watch (it asks twice
+and deletes every custom workout).
 <!-- Builder: tools/workout-builder.html in the source; link the hosted page here once it is published. -->
 
 **Mistakes happen.** Pressed the wrong button? The top left button undoes the last shot. The bottom left
@@ -98,12 +102,13 @@ In the pause menu, BACK resumes. Holding DOWN can be set to pause instead of cha
 
 ## What's new
 
-**Version 0.1.0** — first release: open sessions at 13 spots; fifteen built-in workouts from 50 to 200 shots
+**Version 0.2.0** — first release: open sessions at 13 spots; fifteen built-in workouts from 50 to 200 shots
 (five drills in small and large sizes — Game Shots in small and medium — plus Warm-up 50, FT Sets 5x10, Elbows &
 Key, Corner 3s and Pro Session 200); custom workouts built on the watch or in the workout builder, a web page
-for making them on your computer and copying them to the watch over USB; undo and pause; results with court
-map, categories, highlights and trend; 50-session history, per-spot records, streak haptics, CSV export,
-settings, dark and light colour schemes.
+for making them on your computer — with a half-court map of each step — and copying them to the watch over
+USB; a Settings row that restores the built-in list; undo and pause; results with court map, categories,
+highlights and trend; 50-session history, per-spot records, streak haptics, CSV export, settings, dark and
+light colour schemes.
 
 ## Category and tags
 
@@ -146,16 +151,21 @@ test package) and when the two differ.
 
 **Icons.** `tools/make_icons.py` (run with `.venv/bin/python3`) regenerates `Resources/icon_60x60.png`,
 `Resources/icon_30x30.png` and `store/icon.png`. Previews come from the self-test's screenshots
-(`tools/ppm2png.py`, see Task 12).
+(`HOOPS_SHOTS_DIR` + `tools/ppm2png.py`, CLAUDE.md "Self-test"); regenerate them after any visible change.
+
+**Builder hosting.** The listing's builder paragraph needs a public URL. The page is one self-contained file
+(`tools/workout-builder.html`), so any static host works: GitHub Pages (push the repo, Settings → Pages →
+deploy from `main`, link `…/tools/workout-builder.html`), or any web space. Replace the HTML comment under the
+builder paragraph with the link before pasting the listing.
 
 **Submission checklist** — deadline **30 Oct 2026, 16:00 UK** (UNA App Competition):
 
 1. apps.unawatch.com → Add New → name "Hoops" + short description → copy the App ID.
 2. Put the App ID in both places: `APP_ID` in `Software/Apps/Hoops-CMake/CMakeLists.txt` and `"id"` in
    `store/app-manifest.json`. Commit.
-3. Tag the release (`git tag -a apps-v0.1.0`; the SDK reads only `apps-vX.Y.Z` tags, `apps-v0.0.1` is on
-   73f0e22) so the build version (and the `.uapp` name and `appVersion`) is clean; commits after the tag add
-   `-<n>-<hash>`, a dirty tree `-dirty`.
+3. Tag the build you submit (`git tag -a apps-vX.Y.Z -m "…"` on the commit with the real App ID; the SDK
+   reads only `apps-vX.Y.Z` tags — `apps-v0.0.1`, `apps-v0.1.0` and `apps-v0.2.0` exist) so the build version
+   (the `.uapp` name and `appVersion`) is clean; commits after a tag add `-<n>-<hash>`, a dirty tree `-dirty`.
 4. `export UNA_SDK=$HOME/una-sdk && tools/package_store.sh` → `dist/Hoops-<ver>.zip` (builds the watch app,
    fills `binary`/`appVersion`, stamps and checks `minKernelVersion`).
 5. On the app page: Version → Upload New → upload the zip; paste the listing text above (description,
