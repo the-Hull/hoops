@@ -95,7 +95,7 @@ Two processes, as every UNA app:
   arrive), Settings.
 - LVGL pool `LV_MEM_SIZE` 56 KB (both CMake files): peak 23 640 B ≈ 23.1 KB in the full self-test walk
   (SpotPicker → Active change-spot switch). RAM (`arm-none-eabi-size`): GUI data+bss 162 044 B ≈ 158 KB of
-  600 KB, service 20 036 B ≈ 20 KB of 500 KB; `.uapp` 311 316 B (0.2.0 Task 1 build).
+  600 KB, service 20 036 B ≈ 20 KB of 500 KB; `.uapp` 311 316 B (0.2.0 branch build).
 
 ## Environment
 
@@ -370,10 +370,13 @@ service 20 036 B; `Hoops_0.0.1-7-92714bf.uapp` 310 216 B; builder import → dow
 `reference-workouts.bin` and of a watch-written `workouts.bin` byte-identical (page code run under Node).
 `apps-v0.1.0` is tagged on `main` after the merge (→ `Hoops_0.1.0.uapp`, `appVersion` 0.1.0).
 
-0.2.0 (in progress, branch `release-0.2.0`): Task 1 — Settings "Restore workouts" (13 rows; RESET_WORKOUTS
-0x0115 deletes every custom workout after a two-SELECT confirm). Verified (2026-10-11): 92 host tests;
-self-test 122/122, crash-resume 9/9, full-store phase 3 12/12 (Dark and Light); LVGL pool peak 23 640 B;
-GUI data+bss 162 044 B, service 20 036 B.
+0.2.0 (2026-10-11, branch `release-0.2.0`): Settings "Restore workouts" (13 rows; RESET_WORKOUTS 0x0115
+deletes every custom workout after a two-SELECT confirm; the presets are code and come back untouched), and a
+collapsible half-court map per workout card in `tools/workout-builder.html` (the watch's picker geometry;
+the active step's spot in teal with a ring, used spots numbered; clicking a dot moves the step). Verified
+(2026-10-11): 92 host tests; self-test 122/122, crash-resume 9/9, full-store phase 3 12/12 (Dark and Light);
+LVGL pool peak 23 640 B; GUI data+bss 162 044 B, service 20 036 B; builder byte identity re-checked under Node.
+`apps-v0.2.0` is tagged on `main` after the merge.
 
 Known limitations / next:
 - A Light-scheme user sees one dark frame at GUI start (the GUI starts Dark until SETTINGS arrives, ~100 ms).
