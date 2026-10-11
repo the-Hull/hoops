@@ -127,7 +127,7 @@ cd Software/Apps/LVGL-GUI/simulator
 cmake -S . -B build-selftest -G Ninja -DCMAKE_CXX_FLAGS=-DHOOPS_SELFTEST=1 && cmake --build build-selftest
 rm -f ../../../Output/workouts.bin ../../../Output/current.bin ../../../Output/settings.bin   # fresh store/settings
 (cd build/bin && SDL_VIDEODRIVER=dummy timeout 400 stdbuf -oL ./HoopsSimulator | grep -E "CHECK|done:")
-#   full walk: "done: 117 checks passed, 0 failed" (ends with Settings and settings.bin back at the defaults)
+#   full walk: "done: 120 checks passed, 0 failed" (ends with Settings and settings.bin back at the defaults)
 # Store screenshots: with HOOPS_SHOTS_DIR (an existing dir, absolute path: the cwd is build/bin) the walk
 # writes 16 frames as <name>.ppm (240x240, spec §8); tools/ppm2png.py makes the 480x480 PNGs.
 SHOTS=$(realpath ../../../..)/shots && mkdir -p $SHOTS     # shots/ is git-ignored

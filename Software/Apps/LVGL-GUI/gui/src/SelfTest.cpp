@@ -273,13 +273,14 @@ RingArcs ringArcs()
 bool onWorkouts(const Model&) { return onScreen(ScreenId::Workouts) && onScreenLabel("WORKOUTS"); }
 bool workoutsOnGameShots(const Model&)
 {
-    return onScreen(ScreenId::Workouts) && onScreenLabel("Game Shots") && onScreenLabel("4 steps - 40 shots");
+    return onScreen(ScreenId::Workouts) && onScreenLabel("Game Shots S") && onScreenLabel("5 steps - 50 shots");
 }
-// 40 shots x 12 s + 4 x 30 s rest = 600 s.
+// 50 shots x 12 s + 5 x 30 s rest = 750 s -> 13 min.
 bool previewGameShots(const Model& m)
 {
-    return onScreen(ScreenId::WorkoutPreview) && m.selectedWorkoutId == 5 && onScreenLabel("GAME SHOTS", Theme::kAccent)
-        && onScreenLabel("Rest 30 s - about 10 min") && onScreenLabel("START") && onScreenLabel("x10");
+    return onScreen(ScreenId::WorkoutPreview) && m.selectedWorkoutId == 5
+        && onScreenLabel("GAME SHOTS S", Theme::kAccent) && onScreenLabel("Rest 30 s - about 13 min")
+        && onScreenLabel("START") && onScreenLabel("x10");
 }
 bool workoutStep(const Model& m, unsigned step, unsigned steps)
 {
@@ -291,21 +292,21 @@ bool workoutStep(const Model& m, unsigned step, unsigned steps)
 bool gsStep1Start(const Model& m)
 {
     const RingArcs r = ringArcs();
-    return workoutStep(m, 1, 4) && onScreenLabel("10 shots left") && r.look == Ring::Look::Segments
+    return workoutStep(m, 1, 5) && onScreenLabel("10 shots left") && r.look == Ring::Look::Segments
         && r.total == 10 && r.line == 10;
 }
 // M M X M M: four green, one red, five grey segments; bits 0b11011.
 bool gsStep1Mid(const Model& m)
 {
     const RingArcs r = ringArcs();
-    return workoutStep(m, 1, 4) && onScreenLabel("5 shots left") && m.snapshot().stepBits() == 0x1Bu
+    return workoutStep(m, 1, 5) && onScreenLabel("5 shots left") && m.snapshot().stepBits() == 0x1Bu
         && r.look == Ring::Look::Segments && r.total == 10 && r.good == 4 && r.bad == 1 && r.line == 5;
 }
-bool gsStep1Last(const Model& m) { return workoutStep(m, 1, 4) && onScreenLabel("last shot!"); }
+bool gsStep1Last(const Model& m) { return workoutStep(m, 1, 5) && onScreenLabel("last shot!"); }
 bool gsRest1(const Model& m)
 {
     return onScreen(ScreenId::Rest) && m.snapshot().state == static_cast<uint8_t>(score::SessionState::Rest)
-        && onScreenLabel("REST", Theme::kAmber) && onScreenLabel("NEXT - STEP 2 / 4")
+        && onScreenLabel("REST", Theme::kAmber) && onScreenLabel("NEXT - STEP 2 / 5")
         && onScreenLabel("R-Elbow x10", 0, true) && restResult(1, "7/10")
         && onScreenLabel("70 %", Theme::kGood) && m.hasStepDone() && m.lastStepDone().rest_s == 30;
 }
@@ -319,25 +320,32 @@ bool restExtended(const Model& m)
     LOG_INFO("rest countdown after +15 s: %s\n", buf);
     return m.snapshot().restRemaining_s >= 40 && onScreenLabel(buf);
 }
-bool gsStep2(const Model& m) { return workoutStep(m, 2, 4) && onScreenLabel("MID - R-ELBOW", Theme::kAccent); }
+bool gsStep2(const Model& m) { return workoutStep(m, 2, 5) && onScreenLabel("MID - R-ELBOW", Theme::kAccent); }
 bool gsRest2(const Model& m)
 {
-    return onScreen(ScreenId::Rest) && onScreenLabel("NEXT - STEP 3 / 4") && onScreenLabel("Free Throw x10")
+    return onScreen(ScreenId::Rest) && onScreenLabel("NEXT - STEP 3 / 5") && onScreenLabel("Free Throw x10")
         && restResult(2, "5/10");
 }
 bool restAfterResume(const Model& m)
 {
     return onScreen(ScreenId::Rest) && m.snapshot().state == static_cast<uint8_t>(score::SessionState::Rest)
-        && onScreenLabel("NEXT - STEP 3 / 4");
+        && onScreenLabel("NEXT - STEP 3 / 5");
 }
-bool gsStep3(const Model& m) { return workoutStep(m, 3, 4) && onScreenLabel("FREE THROW", Theme::kAccent); }
-bool gsRest3(const Model& m) { return onScreen(ScreenId::Rest) && onScreenLabel("NEXT - STEP 4 / 4"); }
-bool gsStep4(const Model& m) { return workoutStep(m, 4, 4); }
-// 7 + 5 + 8 + 6 makes of 40.
+bool gsStep3(const Model& m) { return workoutStep(m, 3, 5) && onScreenLabel("FREE THROW", Theme::kAccent); }
+bool gsRest3(const Model& m) { return onScreen(ScreenId::Rest) && onScreenLabel("NEXT - STEP 4 / 5"); }
+bool gsStep4(const Model& m) { return workoutStep(m, 4, 5) && onScreenLabel("LAYUP - L", Theme::kAccent); }
+// Step 5 next: "Layup - R x10" (or its short form "R x10"), step 4 6/10.
+bool gsRest4(const Model& m)
+{
+    return onScreen(ScreenId::Rest) && onScreenLabel("NEXT - STEP 5 / 5") && onScreenLabel("R x10", 0, true)
+        && restResult(4, "6/10");
+}
+bool gsStep5(const Model& m) { return workoutStep(m, 5, 5) && onScreenLabel("LAYUP - R", Theme::kAccent); }
+// 7 + 5 + 8 + 6 + 8 makes of 50.
 bool gsDone(const Model& m)
 {
-    return onScreen(ScreenId::Rest) && onScreenLabel("WORKOUT DONE", Theme::kGood) && onScreenLabel("26")
-        && onScreenLabel("/40") && m.snapshot().totalAttempts == 40 && m.hasStepDone() && m.lastStepDone().workoutDone
+    return onScreen(ScreenId::Rest) && onScreenLabel("WORKOUT DONE", Theme::kGood) && onScreenLabel("34")
+        && onScreenLabel("/50") && m.snapshot().totalAttempts == 50 && m.hasStepDone() && m.lastStepDone().workoutDone
         && onScreenLabel("UP - keep shooting");
 }
 bool activeDone(const Model& m)
@@ -347,9 +355,10 @@ bool activeDone(const Model& m)
 }
 bool extraShot(const Model& m)
 {
-    return activeDone(m) && m.snapshot().totalAttempts == 41 && m.snapshot().stepAttempts == 1;
+    return activeDone(m) && m.snapshot().totalAttempts == 51 && m.snapshot().stepAttempts == 1;
 }
-// Categories 3PT 7/10, Mid 5/10, FT 8/10, Layup 7/11 (with the extra make).
+// Categories 3PT 7/10, Mid 5/10, FT 8/10, Layup 15/21 (L 6/10 + R 8/10 + the
+// extra make at Layup R).
 bool gsResultsCats(const Model& m)
 {
     if (!onScreen(ScreenId::Results) || m.resultsPage != 1 || !m.hasResults()) {
@@ -359,33 +368,35 @@ bool gsResultsCats(const Model& m)
     LOG_INFO("categories: %u/%u %u/%u %u/%u %u/%u\n", st.cat[0].makes, st.cat[0].attempts, st.cat[1].makes,
              st.cat[1].attempts, st.cat[2].makes, st.cat[2].attempts, st.cat[3].makes, st.cat[3].attempts);
     return st.cat[0].attempts == 10 && st.cat[1].attempts == 10 && st.cat[2].attempts == 10
-        && st.cat[3].attempts == 11 && onScreenLabel("7/10") && onScreenLabel("5/10") && onScreenLabel("8/10")
-        && onScreenLabel("7/11");
+        && st.cat[3].attempts == 21 && st.cat[0].makes == 7 && st.cat[1].makes == 5 && st.cat[2].makes == 8
+        && st.cat[3].makes == 15 && onScreenLabel("7/10") && onScreenLabel("5/10") && onScreenLabel("8/10")
+        && onScreenLabel("15/21");
 }
 bool previewLadder(const Model& m)
 {
     return onScreen(ScreenId::WorkoutPreview) && m.selectedWorkoutId == 4
-        && onScreenLabel("MID-RANGE LADDER", Theme::kAccent) && onScreenLabel("5 mk");
+        && onScreenLabel("MID-RANGE LADDER S", Theme::kAccent) && onScreenLabel("10 mk");
 }
 // Makes goal: a progress ring (grey track + teal fill), not segments.
 bool ladderProgressRing(const Model& m)
 {
     const RingArcs r = ringArcs();
-    return workoutStep(m, 1, 5) && onScreenLabel("2 makes left") && r.look == Ring::Look::Progress && r.total == 2
+    return workoutStep(m, 1, 5) && onScreenLabel("7 makes left") && r.look == Ring::Look::Progress && r.total == 2
         && r.line == 1 && r.accent == 1;
 }
 bool ladderRest(const Model& m)
 {
     const RingArcs r = ringArcs();
-    return onScreen(ScreenId::Rest) && restResult(1, "5/7") && onScreenLabel("NEXT - STEP 2 / 5")
-        && m.lastStepDone().attempts == 7 && r.look == Ring::Look::Progress && r.amber == 1;
+    return onScreen(ScreenId::Rest) && restResult(1, "10/12") && onScreenLabel("NEXT - STEP 2 / 5")
+        && m.lastStepDone().attempts == 12 && m.lastStepDone().rest_s == 15 && r.look == Ring::Look::Progress
+        && r.amber == 1;
 }
 bool previewMikan(const Model& m)
 {
-    return onScreen(ScreenId::WorkoutPreview) && m.selectedWorkoutId == 3 && onScreenLabel("MIKAN LAYUPS")
-        && onScreenLabel("No rest - about 4 min");
+    return onScreen(ScreenId::WorkoutPreview) && m.selectedWorkoutId == 3
+        && onScreenLabel("MIKAN LAYUPS S", Theme::kAccent) && onScreenLabel("No rest - about 10 min");
 }
-// Free Throw 50: the largest segmented ring (50 arcs), then the switch to
+// Free Throw S: the largest segmented ring (50 arcs), then the switch to
 // Pause, the costliest pair of trees for LVGL's pool.
 bool ft50Segments(const Model& m)
 {
@@ -396,10 +407,10 @@ bool ft50Segments(const Model& m)
 }
 bool onPauseFt50(const Model& m) { return onPause(m) && onScreenLabel("Step 1 / 1 - 2/3 - ", 0, true); }
 
-// No rest after step 1: a toast on Active, step 2 already running.
+// No rest after step 1 (25 shots, 18 makes): a toast on Active, step 2 already running.
 bool mikanToast(const Model& m)
 {
-    return workoutStep(m, 2, 2) && onScreenLabel("Step 1 done - 6/10") && m.lastStepDone().rest_s == 0;
+    return workoutStep(m, 2, 2) && onScreenLabel("Step 1 done - 18/25") && m.lastStepDone().rest_s == 0;
 }
 
 // --- Step builder ---------------------------------------------------------------
@@ -580,12 +591,18 @@ bool workoutsWithoutCustom(const Model& m)
 bool sbDuplicate(const Model& m)
 {
     const score::Workout& d = sModel->draft();
-    return onBuilder("NEW STEP 1") && m.draftIsNew && d.id == 0 && strcmp(d.name, "Game Shots 2") == 0
-        && d.stepCount == 4 && onScreenLabel("3PT - Top");
+    return onBuilder("NEW STEP 1") && m.draftIsNew && d.id == 0 && strcmp(d.name, "Game Shots S 2") == 0
+        && d.stepCount == 5 && onScreenLabel("3PT - Top");
+}
+// After the custom workout is deleted the list sits on "+ New workout"; one UP
+// reaches the last preset (index 14).
+bool workoutsOnProSession(const Model&)
+{
+    return onScreen(ScreenId::Workouts) && menuSelected("Pro Session 200") && onScreenLabel("8 steps - 200 shots");
 }
 bool workoutsAfterDiscard(const Model& m)
 {
-    return onWorkouts(m) && m.userWorkoutCount() == 0 && !onScreenLabel("Game Shots 2");
+    return onWorkouts(m) && m.userWorkoutCount() == 0 && !onScreenLabel("Game Shots S 2");
 }
 
 // --- Settings, streak, open target, clear history --------------------------------
@@ -872,12 +889,12 @@ const Step kSteps[] = {
                              '2', "Workouts: DOWN" },
     {  300, nullptr, nullptr, '2', "Workouts: DOWN" },
     {  300, nullptr, nullptr, '2', "Workouts: DOWN" },
-    {  300, nullptr, nullptr, '2', "Workouts: DOWN (Game Shots)", nullptr, "workouts" },
-    {  400, workoutsOnGameShots, "Workouts: Game Shots, 4 steps - 40 shots",
+    {  300, nullptr, nullptr, '2', "Workouts: DOWN (Game Shots S)", nullptr, "workouts" },
+    {  400, workoutsOnGameShots, "Workouts: Game Shots S, 5 steps - 50 shots",
                              '3', "Workouts: SELECT -> Preview", nullptr, "workout-preview" },
-    {  800, previewGameShots, "Preview: GAME SHOTS, rest 30 s, about 10 min",
+    {  800, previewGameShots, "Preview: GAME SHOTS S, rest 30 s, about 13 min",
                              '3', "Preview: SELECT START -> Active (workout)" },
-    { 1200, gsStep1Start, "Active workout: STEP 1 / 4, 10 grey segments",
+    { 1200, gsStep1Start, "Active workout: STEP 1 / 5, 10 grey segments",
                              '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
@@ -890,11 +907,11 @@ const Step kSteps[] = {
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  500, gsStep1Last, "one shot left: last shot!",
                              '3', "Active: make (10th: step done)", nullptr, "rest" },
-    {  800, gsRest1, "Rest header REST (amber), NEXT - STEP 2 / 4, Step 1 (done) - 7/10 - 70 %",
+    {  800, gsRest1, "Rest header REST (amber), NEXT - STEP 2 / 5, Step 1 (done) - 7/10 - 70 %",
                              '1', "Rest: UP +15 s" },
     {  800, restExtended, "countdown after +15 s >= 0:40",
                              '3', "Rest: SELECT skip -> Active step 2" },
-    {  800, gsStep2, "Active: STEP 2 / 4 at MID - R-ELBOW",
+    {  800, gsStep2, "Active: STEP 2 / 5 at MID - R-ELBOW",
                              '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
@@ -905,13 +922,13 @@ const Step kSteps[] = {
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
-    {  800, gsRest2, "Rest: NEXT - STEP 3 / 4, Free Throw x10",
+    {  800, gsRest2, "Rest: NEXT - STEP 3 / 5, Free Throw x10",
                              '2', "Rest: DOWN -> pause, Pause" },
     { 1000, onPause, "on Pause from Rest",
                              '3', "Pause: SELECT Resume" },
     { 1000, restAfterResume, "resumed back into Rest",
                              '3', "Rest: SELECT skip -> Active step 3" },
-    {  800, gsStep3, "Active: STEP 3 / 4 at FREE THROW",
+    {  800, gsStep3, "Active: STEP 3 / 5 at FREE THROW",
                              '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
@@ -922,9 +939,9 @@ const Step kSteps[] = {
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
-    {  800, gsRest3, "Rest: NEXT - STEP 4 / 4",
+    {  800, gsRest3, "Rest: NEXT - STEP 4 / 5",
                              '3', "Rest: SELECT skip -> Active step 4" },
-    {  800, gsStep4, "Active: STEP 4 / 4",
+    {  800, gsStep4, "Active: STEP 4 / 5 at LAYUP - L",
                              '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
@@ -934,8 +951,21 @@ const Step kSteps[] = {
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
+    {  300, nullptr, nullptr, '3', "Active: make (step 4: 6/10)" },
+    {  800, gsRest4, "Rest: NEXT - STEP 5 / 5, Layup - R x10, Step 4 - 6/10",
+                             '3', "Rest: SELECT skip -> Active step 5" },
+    {  800, gsStep5, "Active: STEP 5 / 5 at LAYUP - R",
+                             '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
-    {  800, gsDone, "done mode: WORKOUT DONE (green), 26/40",
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '4', "Active: miss" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '4', "Active: miss" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make (step 5: 8/10, workout done)" },
+    {  800, gsDone, "done mode: WORKOUT DONE (green), 34/50",
                              '2', "Rest (done): DOWN -> pause, Pause" },
     { 1000, onPause, "on Pause from the done summary",
                              '3', "Pause: SELECT Resume" },
@@ -943,30 +973,35 @@ const Step kSteps[] = {
                              '1', "Rest (done): UP keep shooting -> Active" },
     {  800, activeDone, "Active: WORKOUT DONE header, extra shots",
                              '3', "Active: make (extra shot)" },
-    {  600, extraShot, "extra shot counted: total 41",
+    {  600, extraShot, "extra shot counted: total 51",
                              '2', "Active: DOWN -> pause, Pause" },
     {  800, nullptr, nullptr, '2', "Pause: DOWN -> End & save" },
     {  500, nullptr, nullptr, '3', "Pause: SELECT End & save -> Results", nullptr, "results-court" },
     { 1500, onResults, "on Results after the workout",
                              '3', "Results 1: SELECT -> page 2", nullptr, "results-categories" },
-    {  600, gsResultsCats, "Results page 2: 4 categories, attempts 10/10/10/11",
+    {  600, gsResultsCats, "Results page 2: 4 categories, 7/10 5/10 8/10 15/21",
                              '4', "Results: BACK -> Home" },
     // Mid-range Ladder: Makes goals, a progress ring.
     { 1000, onHome, "on Home after the workout",
                              '3', "Home: SELECT -> Workouts" },
-    { 1000, nullptr, nullptr, '1', "Workouts: UP (Mid-range Ladder)" },
+    { 1000, nullptr, nullptr, '1', "Workouts: UP (Mid-range Ladder S)" },
     {  400, nullptr, nullptr, '3', "Workouts: SELECT -> Preview" },
-    {  800, previewLadder, "Preview: MID-RANGE LADDER, 5 mk rows",
+    {  800, previewLadder, "Preview: MID-RANGE LADDER S, 10 mk rows",
                              '3', "Preview: SELECT START -> Active" },
     { 1200, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
-    {  500, ladderProgressRing, "Makes goal: progress ring (track + teal fill), 2 makes left",
+    {  500, ladderProgressRing, "Makes goal: progress ring (track + teal fill), 7 makes left",
                              '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
-    {  800, ladderRest, "Rest after 5 makes in 7 shots, amber ring",
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make (10th make: step done)" },
+    {  800, ladderRest, "Rest after 10 makes in 12 shots, rest 15, amber ring",
                              '2', "Rest: DOWN -> pause, Pause" },
     {  800, nullptr, nullptr, '2', "Pause: DOWN" },
     {  400, nullptr, nullptr, '2', "Pause: DOWN -> Discard" },
@@ -975,9 +1010,9 @@ const Step kSteps[] = {
     // Mikan Layups: no rest between the steps -> toast.
     { 1500, onHome, "on Home after discarding the ladder",
                              '3', "Home: SELECT -> Workouts" },
-    { 1000, nullptr, nullptr, '1', "Workouts: UP (Mikan Layups)" },
+    { 1000, nullptr, nullptr, '1', "Workouts: UP (Mikan Layups S)" },
     {  400, nullptr, nullptr, '3', "Workouts: SELECT -> Preview" },
-    {  800, previewMikan, "Preview: MIKAN LAYUPS, no rest",
+    {  800, previewMikan, "Preview: MIKAN LAYUPS S, no rest, about 10 min",
                              '3', "Preview: SELECT START -> Active" },
     { 1200, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
@@ -988,23 +1023,38 @@ const Step kSteps[] = {
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '4', "Active: miss (10 shots: 6/10)" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
-    {  500, mikanToast, "zero-rest step: toast Step 1 done - 6/10, STEP 2 / 2",
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '4', "Active: miss" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '4', "Active: miss" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make" },
+    {  300, nullptr, nullptr, '3', "Active: make (25th shot: step 1 done, 18/25)" },
+    {  500, mikanToast, "zero-rest step: toast Step 1 done - 18/25, STEP 2 / 2",
                              '2', "Active: DOWN -> pause, Pause" },
     {  800, nullptr, nullptr, '2', "Pause: DOWN" },
     {  400, nullptr, nullptr, '2', "Pause: DOWN -> Discard" },
     {  400, nullptr, nullptr, '3', "Pause: SELECT Discard -> confirm" },
     {  400, nullptr, nullptr, '3', "Pause: SELECT -> discard, Home" },
-    // Free Throw 50: 50 segments, then Pause.
+    // Free Throw S: 50 segments, then Pause.
     { 1500, onHome, "on Home after discarding Mikan Layups",
                              '3', "Home: SELECT -> Workouts" },
-    { 1000, nullptr, nullptr, '1', "Workouts: UP (Free Throw 50)" },
+    { 1000, nullptr, nullptr, '1', "Workouts: UP (Free Throw S)" },
     {  400, nullptr, nullptr, '3', "Workouts: SELECT -> Preview" },
     {  800, nullptr, nullptr, '3', "Preview: SELECT START -> Active" },
     { 1200, nullptr, nullptr, '3', "Active: make" },
     {  300, nullptr, nullptr, '4', "Active: miss" },
     {  300, nullptr, nullptr, '3', "Active: make" },
-    {  500, ft50Segments, "Free Throw 50: 50 segments (2 green, 1 red)",
+    {  500, ft50Segments, "Free Throw S: 50 segments (2 green, 1 red)",
                              '2', "Active: DOWN -> pause, Pause" },
     { 1000, onPauseFt50, "on Pause from a 50-segment Active",
                              '2', "Pause: DOWN" },
@@ -1099,12 +1149,23 @@ const Step kSteps[] = {
     {  300, sbConfirm, "Delete? / SELECT again, nothing deleted yet",
                              '3', "StepBuilder menu: SELECT again -> delete, Workouts" },
     { 1500, workoutsWithoutCustom, "Workouts without Custom 1, 0 user workouts, workouts.bin still 716 B",
-                             '1', "Workouts: UP (Game Shots)" },
-    {  400, workoutsOnGameShots, "Workouts: Game Shots",
+                             '1', "Workouts: UP from + New workout (Pro Session 200)" },
+    {  400, workoutsOnProSession, "Workouts: UP from + New workout lands on Pro Session 200 (8 steps - 200 shots)",
+                             '1', "Workouts: UP (Corner 3s)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (Game Shots M)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (Mid-range Ladder L)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (Mikan Layups L)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (Free Throw L)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (Around the World L)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (Elbows & Key)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (FT Sets 5x10)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (Warm-up 50)" },
+    {  300, nullptr, nullptr, '1', "Workouts: UP (Game Shots S)" },
+    {  400, workoutsOnGameShots, "Workouts: Game Shots S",
                              '3', "Workouts: SELECT -> Preview" },
-    {  800, previewGameShots, "Preview: GAME SHOTS",
+    {  800, previewGameShots, "Preview: GAME SHOTS S",
                              '2', "Preview: DOWN -> StepBuilder (a copy)" },
-    {  800, sbDuplicate, "duplicate: NEW STEP 1, Game Shots 2, id 0, 4 steps",
+    {  800, sbDuplicate, "duplicate: NEW STEP 1, Game Shots S 2, id 0, 5 steps",
                              '4', "StepBuilder Spot: BACK -> discard, Workouts" },
     {  800, workoutsAfterDiscard, "Workouts after the discard: nothing saved",
                              '4', "Workouts: BACK -> Home" },
