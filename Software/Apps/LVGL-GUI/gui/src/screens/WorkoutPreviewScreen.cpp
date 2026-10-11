@@ -24,8 +24,11 @@ using Font = Theme::Font;
 // Layout, docs/mockup-layout.md §4 (vertical centres).
 constexpr int32_t kHeaderY      = 46;
 constexpr int32_t kRowY[4]      = { 69, 94, 119, 143 };
-constexpr int32_t kDenseTop     = 62;    // five rows, 20 px apart
-constexpr int32_t kDensePitch   = 20;
+// Five rows, 19 px apart, starting low enough that row 1 clears the SELECT
+// badge (centre y 55, r 9); the counts also stop short of it (x 200).
+constexpr int32_t kDenseTop        = 68;
+constexpr int32_t kDensePitch      = 19;
+constexpr int32_t kDenseCountRight = 196;
 constexpr uint8_t kMaxRows      = 5;
 constexpr int32_t kNumX         = 46;
 constexpr int32_t kNumR         = 9;
@@ -42,6 +45,11 @@ constexpr Font kLabelFonts[] = { Font::Medium18, Font::Regular16, Font::Regular1
 int32_t rowY(uint8_t i, uint8_t rows)
 {
     return rows <= 4 ? kRowY[i] : kDenseTop + i * kDensePitch;
+}
+
+int32_t countRight(uint8_t rows)
+{
+    return rows <= 4 ? kCountRight : kDenseCountRight;
 }
 
 } // namespace
@@ -101,13 +109,14 @@ bool WorkoutPreviewScreen::show()
 
     const uint8_t steps = w->stepCount < score::kMaxSteps ? w->stepCount : score::kMaxSteps;
     const uint8_t rows  = steps <= kMaxRows ? steps : kMaxRows;
+    const int32_t right = countRight(rows);
     for (uint8_t i = 0; i < rows; ++i) {
         const int32_t y = rowY(i, rows);
         if (i == kMaxRows - 1 && steps > kMaxRows) {
             char more[24];
             snprintf(more, sizeof(more), "+ %u more steps", static_cast<unsigned>(steps - (kMaxRows - 1)));
             Theme::label(mContent, Font::Regular14, more, kLabelX, Theme::topFor(Font::Regular14, y),
-                         kCountRight - kLabelX, LV_TEXT_ALIGN_LEFT, Theme::kDim);
+                         right - kLabelX, LV_TEXT_ALIGN_LEFT, Theme::kDim);
             break;
         }
         const score::Step& st = w->steps[i];
@@ -121,13 +130,13 @@ bool WorkoutPreviewScreen::show()
         char count[12];
         Theme::fmtGoal(count, sizeof(count), st.goal.type, st.goal.value);
         const int32_t wc = Theme::textWidth(Font::SemiBold20, count);
-        Theme::label(mContent, Font::SemiBold20, count, kCountRight - wc - 1, Theme::topFor(Font::SemiBold20, y), wc + 1,
+        Theme::label(mContent, Font::SemiBold20, count, right - wc - 1, Theme::topFor(Font::SemiBold20, y), wc + 1,
                      LV_TEXT_ALIGN_RIGHT, Theme::kDim);
 
         // The spot, without its category part when it does not fit.
         const char* name    = score::spotInfo(st.spot).name;
         const char* texts[] = { name, Theme::spotShort(name) };
-        Theme::fitLabel(mContent, texts, 2, kLabelFonts, 3, kLabelX, kCountRight - wc - kRowGap - kLabelX, y,
+        Theme::fitLabel(mContent, texts, 2, kLabelFonts, 3, kLabelX, right - wc - kRowGap - kLabelX, y,
                         LV_TEXT_ALIGN_LEFT, Theme::kText);
     }
 
