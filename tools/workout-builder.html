@@ -105,6 +105,33 @@
   .valuebox { display: flex; align-items: center; gap: 4px; }
   .valuebox span { font-size: 0.8rem; color: var(--muted); }
   .addstep { margin-top: 6px; }
+  .step.active .num { color: var(--accent); }
+
+  /* Court map: the watch's spot picker (viewBox 200x135 = Spots.cpp courtX/courtY units). */
+  .court { margin: 0 0 8px; }
+  .court summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; width: fit-content; padding: 2px 4px 2px 0;
+                   border-radius: 4px; }
+  .court summary:hover { color: var(--text); }
+  .court summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .court svg { display: block; width: 100%; max-width: 320px; height: auto; margin: 4px 0 2px; padding: 5px;
+               background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow: visible; }
+  .court .lines { fill: none; stroke: var(--muted); stroke-opacity: 0.45; stroke-width: 1.2; }
+  .court .hoop { fill: none; stroke: var(--warn); stroke-width: 1.5; }
+  .court .spot { cursor: pointer; outline: none; }
+  .court .spot[aria-disabled="true"] { cursor: default; }
+  .court .spot .hit { fill: transparent; }
+  .court .spot .dot { fill: var(--muted); fill-opacity: 0.45; }
+  .court .spot:hover .dot { fill-opacity: 0.8; }
+  .court .spot.used .dot { fill: var(--text); fill-opacity: 1; }
+  .court .spot.active .dot { fill: var(--accent); fill-opacity: 1; }
+  .court .spot .ring { fill: none; stroke: var(--accent); stroke-width: 3; display: none; }
+  .court .spot.active .ring { display: inline; }
+  .court .spot .focus { fill: none; stroke: var(--text); stroke-width: 1; stroke-dasharray: 2 2; display: none;
+                        pointer-events: none; }
+  .court .spot:focus-visible .focus { display: inline; }
+  .court .num { font-size: 9px; font-weight: 600; fill: var(--text); dominant-baseline: central; pointer-events: none;
+                paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
+  .court .spot.active .num { fill: var(--accent); }
 
   .issues { list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.9rem; }
   .issues li { padding: 2px 0 2px 1.4em; position: relative; }
@@ -133,7 +160,8 @@
   <header>
     <h1><span>Hoops</span> workout builder</h1>
     <p class="lead">Build custom shooting workouts on your computer and copy them to the Hoops app on your UNA Watch.<br>
-      Up to 10 workouts of up to 8 steps each. Everything happens in this page; nothing is uploaded.</p>
+      Up to 10 workouts of up to 8 steps each. Everything happens in this page; nothing is uploaded.<br>
+      The court shows the step you are editing; click a spot to move it.</p>
   </header>
 
   <section class="box install" aria-labelledby="installTitle">
@@ -220,21 +248,22 @@ const LIMITS = Object.freeze({
   SECONDS_PER_SHOT: 12,         // Workout::estimateSeconds
 });
 
-// score::Spot order (index = enum value) with the display names of score/Spots.cpp.
+// score::Spot order (index = enum value) with the display names and court positions (courtX/courtY in the
+// 200x135 picker court) of score/Spots.cpp.
 const SPOTS = Object.freeze([
-  { key: "LCorner3",     name: "3PT · L-Corner" },
-  { key: "LWing3",       name: "3PT · L-Wing" },
-  { key: "Top3",         name: "3PT · Top" },
-  { key: "RWing3",       name: "3PT · R-Wing" },
-  { key: "RCorner3",     name: "3PT · R-Corner" },
-  { key: "LBaselineMid", name: "Mid · L-Baseline" },
-  { key: "LElbowMid",    name: "Mid · L-Elbow" },
-  { key: "TopKeyMid",    name: "Mid · Top-Key" },
-  { key: "RElbowMid",    name: "Mid · R-Elbow" },
-  { key: "RBaselineMid", name: "Mid · R-Baseline" },
-  { key: "Ft",           name: "Free Throw" },
-  { key: "LayupL",       name: "Layup · L" },
-  { key: "LayupR",       name: "Layup · R" },
+  { key: "LCorner3",     name: "3PT · L-Corner",    x: 12,  y:  28 },
+  { key: "LWing3",       name: "3PT · L-Wing",      x: 36,  y:  92 },
+  { key: "Top3",         name: "3PT · Top",         x: 100, y: 118 },
+  { key: "RWing3",       name: "3PT · R-Wing",      x: 164, y:  92 },
+  { key: "RCorner3",     name: "3PT · R-Corner",    x: 188, y:  28 },
+  { key: "LBaselineMid", name: "Mid · L-Baseline",  x: 44,  y:  26 },
+  { key: "LElbowMid",    name: "Mid · L-Elbow",     x: 68,  y:  76 },
+  { key: "TopKeyMid",    name: "Mid · Top-Key",     x: 100, y:  94 },
+  { key: "RElbowMid",    name: "Mid · R-Elbow",     x: 132, y:  76 },
+  { key: "RBaselineMid", name: "Mid · R-Baseline",  x: 156, y:  26 },
+  { key: "Ft",           name: "Free Throw",        x: 100, y:  77 },
+  { key: "LayupL",       name: "Layup · L",         x: 82,  y:  34 },
+  { key: "LayupR",       name: "Layup · R",         x: 118, y:  34 },
 ]);
 // score::GoalType: Attempts 0, Makes 1, Time 2 (JSON keys as in tools/gen_presets.py).
 const GOALS = Object.freeze([
@@ -484,6 +513,41 @@ function move(arr, i, d) {
 
 function parseValue(text) { return /^\d+$/.test(text.trim()) ? parseInt(text, 10) : NaN; }
 
+// --- court map state (per workout object, this page load only; never exported) -------------------------------
+
+const activeStep = new WeakMap();   // workout -> index of the step the court shows (default 0)
+const courtOpen = new WeakMap();    // workout -> false once its court <details> was collapsed
+
+function activeIndex(w) {
+  if (w.steps.length === 0) return -1;
+  return Math.min(activeStep.get(w) || 0, w.steps.length - 1);
+}
+
+/** Makes step j of w the active one and redraws the courts (after a move or an add the step keeps the court). */
+function follow(w, j) {
+  activeStep.set(w, j);
+  refresh();
+}
+
+// Side of the dot where the step numbers go: right, left or below (never towards the hoop or off the court).
+const LABEL_SIDE = Object.freeze({
+  LCorner3: "b", LWing3: "l", Top3: "r", RWing3: "r", RCorner3: "b",
+  LBaselineMid: "b", LElbowMid: "l", TopKeyMid: "r", RElbowMid: "r", RBaselineMid: "b",
+  Ft: "r", LayupL: "l", LayupR: "r",
+});
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+function svg(tag, attrs, ...children) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "dataset") Object.assign(e.dataset, v);
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const c of children) if (c != null) e.append(c);
+  return e;
+}
+
 // --- rendering ------------------------------------------------------------------------------------------------
 
 function render() {
@@ -523,6 +587,15 @@ function renderWorkout(w, i) {
                      } }, "Delete")),
   ));
   card.append(el("p", { class: "stats", dataset: { role: "stats" } }));
+  card.append(renderCourt(card, w, i));
+
+  // The court follows the step row that last had focus or was last changed.
+  const track = (e) => {
+    const row = e.target.closest && e.target.closest("li.step");
+    if (row && card.contains(row)) { activeStep.set(w, +row.dataset.step); updateCourt(card, w); }
+  };
+  card.addEventListener("focusin", track);
+  card.addEventListener("change", track);
 
   const steps = el("ol", { class: "steps" });
   w.steps.forEach((s, j) => steps.append(renderStep(w, i, s, j)));
@@ -533,6 +606,7 @@ function renderWorkout(w, i) {
       const last = w.steps[w.steps.length - 1];
       w.steps.push(last ? { ...last } : { spot: 2, goal: 0, value: 10, rest: 30 });
       changed(true);
+      follow(w, w.steps.length - 1);
     },
   }, w.steps.length >= LAYOUT.MAX_STEPS ? `8 steps (the maximum)` : "+ Add step"));
   card.append(el("ul", { class: "issues", dataset: { role: "issues" } }));
@@ -580,13 +654,79 @@ function renderStep(w, i, s, j) {
     el("div", { class: "stools" },
       el("button", { type: "button", class: "icon", title: "Move step up", "aria-label": `Move step ${j + 1} up`,
                      disabled: j === 0, dataset: { key: `${k}-up` },
-                     onclick: () => { move(w.steps, j, -1); changed(true); } }, "↑"),
+                     onclick: () => { move(w.steps, j, -1); changed(true); follow(w, j - 1); } }, "↑"),
       el("button", { type: "button", class: "icon", title: "Move step down", "aria-label": `Move step ${j + 1} down`,
                      disabled: j === w.steps.length - 1, dataset: { key: `${k}-down` },
-                     onclick: () => { move(w.steps, j, 1); changed(true); } }, "↓"),
+                     onclick: () => { move(w.steps, j, 1); changed(true); follow(w, j + 1); } }, "↓"),
       el("button", { type: "button", class: "icon danger", title: "Delete step", "aria-label": `Delete step ${j + 1}`,
-                     onclick: () => { w.steps.splice(j, 1); changed(true); } }, "✕")),
+                     onclick: () => {
+                       const a = activeIndex(w);
+                       w.steps.splice(j, 1);
+                       if (a > j) activeStep.set(w, a - 1);
+                       changed(true);
+                     } }, "✕")),
     chips);
+}
+
+/** The collapsible court: lines as on the watch's spot picker and one button per spot; updateCourt() styles them. */
+function renderCourt(card, w, i) {
+  const pick = (idx) => {
+    const j = activeIndex(w);
+    if (j < 0) return;
+    w.steps[j].spot = idx;                    // the same as choosing the spot in the step's <select>
+    const select = card.querySelector(`[data-key="w${i}s${j}-spot"]`);
+    if (select) select.value = String(idx);
+    changed(false);
+  };
+  const spots = SPOTS.map((sp, idx) => svg("g", {
+    class: "spot", role: "button", tabindex: 0, "aria-label": sp.name, dataset: { key: `w${i}-spot${idx}`, spot: idx },
+    onclick: () => pick(idx),
+    onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(idx); } },
+  },
+    svg("title", {}, sp.name),
+    svg("circle", { class: "hit", cx: sp.x, cy: sp.y, r: 8.5 }),
+    svg("circle", { class: "ring", cx: sp.x, cy: sp.y, r: 13 }),
+    svg("circle", { class: "dot", cx: sp.x, cy: sp.y, r: 5 }),
+    svg("circle", { class: "focus", cx: sp.x, cy: sp.y, r: 9.5 }),
+    svg("text", { class: "num" })));
+  const court = svg("svg", { viewBox: "0 0 200 135", role: "group", "aria-label": `Court of workout ${i + 1}` },
+    svg("g", { class: "lines" },
+      svg("path", { d: "M2 10 H198" }),
+      svg("rect", { x: 73, y: 10, width: 54, height: 64 }),
+      svg("path", { d: "M80 74 A20 20 0 0 0 120 74" }),
+      svg("path", { d: "M22 10 L22 45 A80.5 80.5 0 0 0 178 45 L178 10" })),
+    svg("circle", { class: "hoop", cx: 100, cy: 25, r: 5 }),
+    ...spots);
+  return el("details", { class: "court", open: courtOpen.get(w) !== false,
+                         ontoggle: (e) => courtOpen.set(w, e.currentTarget.open) },
+    el("summary", { dataset: { key: `w${i}-court` } }, "Court"), court);
+}
+
+/** Restyles the court of one card: dim spots, spots used by the steps (with their numbers), the active step's spot. */
+function updateCourt(card, w) {
+  const a = activeIndex(w);
+  const activeSpot = a >= 0 ? w.steps[a].spot : -1;
+  const used = new Map();
+  w.steps.forEach((s, j) => used.set(s.spot, [...(used.get(s.spot) || []), j + 1]));
+  card.querySelectorAll(".court .spot").forEach((g) => {
+    const idx = +g.dataset.spot;
+    const sp = SPOTS[idx];
+    const on = idx === activeSpot;
+    const nums = used.get(idx);
+    g.classList.toggle("used", !!nums);
+    g.classList.toggle("active", on);
+    g.setAttribute("aria-disabled", String(a < 0));
+    g.querySelector(".dot").setAttribute("r", on ? 8 : 5);
+    g.querySelector(".focus").setAttribute("r", on ? 17 : 9.5);
+    const t = g.querySelector(".num");
+    t.textContent = nums ? nums.join(",") : "";
+    const d = on ? 17 : 7.5;                   // clear of the ring (r 13 + stroke) or of the dot (r 5)
+    const side = LABEL_SIDE[sp.key];
+    t.setAttribute("x", side === "r" ? sp.x + d : side === "l" ? sp.x - d : sp.x);
+    t.setAttribute("y", side === "b" ? sp.y + d + 3.5 : sp.y);
+    t.setAttribute("text-anchor", side === "r" ? "start" : side === "l" ? "end" : "middle");
+  });
+  card.querySelectorAll("li.step").forEach((row) => row.classList.toggle("active", +row.dataset.step === a));
 }
 
 /** Updates everything derived (counters, stats, issues, export buttons) without rebuilding the inputs. */
@@ -619,6 +759,8 @@ function refresh() {
         b.setAttribute("aria-pressed", String(on));
       });
     });
+
+    updateCourt(card, w);
 
     const ul = card.querySelector('[data-role="issues"]');
     ul.replaceChildren(...list.map((x) => el("li", { class: x.blocking ? "block" : "warn" }, x.text)));
