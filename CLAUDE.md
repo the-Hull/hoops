@@ -10,14 +10,18 @@ Usefulness, Originality, UX/UI (10 pts each). Must be published on
 apps.unawatch.com and submitted via the form. A table-tennis app may follow as a
 second entry (max 2 per person) — keep the scoring engine reusable.
 
-- Feature spec: `docs/feature-spec.md`; design spec: `docs/superpowers/specs/2026-10-10-hoops-mvp-design.md`;
-  implementation plan (Tasks 1–15, all done): `docs/superpowers/plans/2026-10-10-hoops-mvp.md`.
+- Design specs and implementation plans live in `docs/.superpowers/` (specs/, plans/), which is **git-ignored**:
+  they stay on this build machine (one machine builds; the public repo `the-Hull/hoops` carries code, store
+  text and screenshots only; the path was purged from history on 2026-10-11). `notes/` is git-ignored too
+  (developer submission notes). The `.superpowers/` folder at the root is the subagent-review scratch.
+- Feature spec: `docs/feature-spec.md`; design spec: `docs/.superpowers/specs/2026-10-10-hoops-mvp-design.md`;
+  implementation plan (Tasks 1–15, all done): `docs/.superpowers/plans/2026-10-10-hoops-mvp.md`.
 - v2 (settings, full history, CSV export, streaks, store assets; branch `v2`): design spec
-  `docs/superpowers/specs/2026-10-10-hoops-v2-design.md` (wins over the MVP spec where they differ),
-  plan (Tasks 1–14, all done) `docs/superpowers/plans/2026-10-10-hoops-v2.md`.
+  `docs/.superpowers/specs/2026-10-10-hoops-v2-design.md` (wins over the MVP spec where they differ),
+  plan (Tasks 1–14, all done) `docs/.superpowers/plans/2026-10-10-hoops-v2.md`.
 - 0.1.0 (15 presets generated from JSON, browser workout builder; branch `release-0.1.0`): design spec
-  `docs/superpowers/specs/2026-10-11-hoops-0.1.0-design.md`, plan (Tasks 1–4, all done)
-  `docs/superpowers/plans/2026-10-11-hoops-0.1.0.md`.
+  `docs/.superpowers/specs/2026-10-11-hoops-0.1.0-design.md`, plan (Tasks 1–4, all done)
+  `docs/.superpowers/plans/2026-10-11-hoops-0.1.0.md`.
 - Store: listing text `docs/store/listing.md`, 16 previews `docs/store/previews/*.png` (480×480, from the
   self-test), `store/app-manifest.json` + `store/icon.png`; app icons `Resources/icon_60x60.png`, `icon_30x30.png`.
 - Screen mockups (14 screens): `docs/mockups/*.dc.html`; measured layout per screen: `docs/mockup-layout.md`.
