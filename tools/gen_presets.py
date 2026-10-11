@@ -14,7 +14,7 @@ presets.json is one array; list order = id order (1..N) = order on the watch:
   value  1..999 (shots, or seconds for time)
   rest   0..255 seconds after the step
 
-Validated: 1..255 presets; name 1..19 bytes (UTF-8) and unique; 1..8 steps; spot and goal known;
+Validated: 1..99 presets (ids stay below the user-workout range); name 1..19 bytes (UTF-8) and unique; 1..8 steps; spot and goal known;
 value and rest in range; volume (sum of attempts and makes values) <= 400 (kMaxShots). An attempts
 value above 50 only warns: the GUI then draws a progress ring instead of a segmented one.
 
