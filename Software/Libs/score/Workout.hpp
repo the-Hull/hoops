@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "score/Presets.hpp"   // kPresetCount (generated from presets.json)
 #include "score/Spots.hpp"
 
 #include <cstdint>
@@ -32,7 +33,6 @@ static_assert(sizeof(Step) == 6 && std::has_unique_object_representations<Step>:
 constexpr uint8_t kMaxSteps           = 8;
 constexpr uint8_t kMaxUserWorkouts    = 10;
 constexpr uint8_t kNameLen            = 20;
-constexpr uint8_t kPresetCount        = 5;
 constexpr uint8_t kFirstUserWorkoutId = 100;
 
 struct Workout {

@@ -1,0 +1,111 @@
+[
+  { "name": "Around the World S",
+    "steps": [
+      { "spot": "LCorner3",     "goal": "attempts", "value": 10, "rest": 15 },
+      { "spot": "LWing3",       "goal": "attempts", "value": 10, "rest": 15 },
+      { "spot": "Top3",         "goal": "attempts", "value": 10, "rest": 15 },
+      { "spot": "RWing3",       "goal": "attempts", "value": 10, "rest": 15 },
+      { "spot": "RCorner3",     "goal": "attempts", "value": 10, "rest": 15 }
+    ] },
+  { "name": "Free Throw S",
+    "steps": [
+      { "spot": "Ft",           "goal": "attempts", "value": 50, "rest":  0 }
+    ] },
+  { "name": "Mikan Layups S",
+    "steps": [
+      { "spot": "LayupL",       "goal": "attempts", "value": 25, "rest":  0 },
+      { "spot": "LayupR",       "goal": "attempts", "value": 25, "rest":  0 }
+    ] },
+  { "name": "Mid-range Ladder S",
+    "steps": [
+      { "spot": "LBaselineMid", "goal": "makes",    "value": 10, "rest": 15 },
+      { "spot": "LElbowMid",    "goal": "makes",    "value": 10, "rest": 15 },
+      { "spot": "TopKeyMid",    "goal": "makes",    "value": 10, "rest": 15 },
+      { "spot": "RElbowMid",    "goal": "makes",    "value": 10, "rest": 15 },
+      { "spot": "RBaselineMid", "goal": "makes",    "value": 10, "rest": 15 }
+    ] },
+  { "name": "Game Shots S",
+    "steps": [
+      { "spot": "Top3",         "goal": "attempts", "value": 10, "rest": 30 },
+      { "spot": "RElbowMid",    "goal": "attempts", "value": 10, "rest": 30 },
+      { "spot": "Ft",           "goal": "attempts", "value": 10, "rest": 30 },
+      { "spot": "LayupL",       "goal": "attempts", "value": 10, "rest": 30 },
+      { "spot": "LayupR",       "goal": "attempts", "value": 10, "rest": 30 }
+    ] },
+  { "name": "Warm-up 50",
+    "steps": [
+      { "spot": "LayupL",       "goal": "attempts", "value": 10, "rest":  0 },
+      { "spot": "LayupR",       "goal": "attempts", "value": 10, "rest":  0 },
+      { "spot": "Ft",           "goal": "attempts", "value": 10, "rest":  0 },
+      { "spot": "TopKeyMid",    "goal": "attempts", "value": 10, "rest":  0 },
+      { "spot": "Top3",         "goal": "attempts", "value": 10, "rest":  0 }
+    ] },
+  { "name": "FT Sets 5x10",
+    "steps": [
+      { "spot": "Ft",           "goal": "attempts", "value": 10, "rest": 30 },
+      { "spot": "Ft",           "goal": "attempts", "value": 10, "rest": 30 },
+      { "spot": "Ft",           "goal": "attempts", "value": 10, "rest": 30 },
+      { "spot": "Ft",           "goal": "attempts", "value": 10, "rest": 30 },
+      { "spot": "Ft",           "goal": "attempts", "value": 10, "rest": 30 }
+    ] },
+  { "name": "Elbows & Key",
+    "steps": [
+      { "spot": "LElbowMid",    "goal": "makes",    "value": 15, "rest": 15 },
+      { "spot": "RElbowMid",    "goal": "makes",    "value": 15, "rest": 15 },
+      { "spot": "TopKeyMid",    "goal": "makes",    "value": 20, "rest": 15 }
+    ] },
+  { "name": "Around the World L",
+    "steps": [
+      { "spot": "LCorner3",     "goal": "attempts", "value": 20, "rest": 30 },
+      { "spot": "LWing3",       "goal": "attempts", "value": 20, "rest": 30 },
+      { "spot": "Top3",         "goal": "attempts", "value": 20, "rest": 30 },
+      { "spot": "RWing3",       "goal": "attempts", "value": 20, "rest": 30 },
+      { "spot": "RCorner3",     "goal": "attempts", "value": 20, "rest": 30 }
+    ] },
+  { "name": "Free Throw L",
+    "steps": [
+      { "spot": "Ft",           "goal": "attempts", "value": 50, "rest": 60 },
+      { "spot": "Ft",           "goal": "attempts", "value": 50, "rest": 60 }
+    ] },
+  { "name": "Mikan Layups L",
+    "steps": [
+      { "spot": "LayupL",       "goal": "attempts", "value": 50, "rest": 30 },
+      { "spot": "LayupR",       "goal": "attempts", "value": 50, "rest": 30 }
+    ] },
+  { "name": "Mid-range Ladder L",
+    "steps": [
+      { "spot": "LBaselineMid", "goal": "makes",    "value": 20, "rest": 30 },
+      { "spot": "LElbowMid",    "goal": "makes",    "value": 20, "rest": 30 },
+      { "spot": "TopKeyMid",    "goal": "makes",    "value": 20, "rest": 30 },
+      { "spot": "RElbowMid",    "goal": "makes",    "value": 20, "rest": 30 },
+      { "spot": "RBaselineMid", "goal": "makes",    "value": 20, "rest": 30 }
+    ] },
+  { "name": "Game Shots M",
+    "steps": [
+      { "spot": "Top3",         "goal": "attempts", "value": 20, "rest": 15 },
+      { "spot": "LWing3",       "goal": "attempts", "value": 15, "rest": 15 },
+      { "spot": "RWing3",       "goal": "attempts", "value": 15, "rest": 15 },
+      { "spot": "TopKeyMid",    "goal": "attempts", "value": 20, "rest": 15 },
+      { "spot": "Ft",           "goal": "attempts", "value": 20, "rest": 15 },
+      { "spot": "LayupL",       "goal": "attempts", "value":  5, "rest": 15 },
+      { "spot": "LayupR",       "goal": "attempts", "value":  5, "rest": 15 }
+    ] },
+  { "name": "Corner 3s",
+    "steps": [
+      { "spot": "LCorner3",     "goal": "attempts", "value": 25, "rest": 15 },
+      { "spot": "RCorner3",     "goal": "attempts", "value": 25, "rest": 15 },
+      { "spot": "LCorner3",     "goal": "attempts", "value": 25, "rest": 15 },
+      { "spot": "RCorner3",     "goal": "attempts", "value": 25, "rest": 15 }
+    ] },
+  { "name": "Pro Session 200",
+    "steps": [
+      { "spot": "Top3",         "goal": "attempts", "value": 30, "rest": 30 },
+      { "spot": "LWing3",       "goal": "attempts", "value": 25, "rest": 30 },
+      { "spot": "RWing3",       "goal": "attempts", "value": 25, "rest": 30 },
+      { "spot": "TopKeyMid",    "goal": "attempts", "value": 30, "rest": 30 },
+      { "spot": "LElbowMid",    "goal": "attempts", "value": 20, "rest": 30 },
+      { "spot": "RElbowMid",    "goal": "attempts", "value": 20, "rest": 30 },
+      { "spot": "Ft",           "goal": "attempts", "value": 30, "rest": 30 },
+      { "spot": "LayupL",       "goal": "attempts", "value": 20, "rest": 30 }
+    ] }
+]

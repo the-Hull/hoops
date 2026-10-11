@@ -1,34 +1,11 @@
 #include "score/Workout.hpp"
+#include "score/PresetsTable.hpp"
 
 namespace score {
 
 namespace {
 
 constexpr uint32_t kSecondsPerShot = 12;
-
-constexpr Step step(Spot s, GoalType t, uint16_t v, uint8_t rest)
-{
-    return { static_cast<uint8_t>(s), rest, { static_cast<uint8_t>(t), 0, v } };
-}
-
-constexpr GoalType A = GoalType::Attempts;
-constexpr GoalType M = GoalType::Makes;
-
-const Workout kPresets[kPresetCount] = {
-    { 1, "Around the World", 5, {
-        step(Spot::LCorner3, A, 10, 15), step(Spot::LWing3, A, 10, 15), step(Spot::Top3, A, 10, 15),
-        step(Spot::RWing3, A, 10, 15), step(Spot::RCorner3, A, 10, 15) } },
-    { 2, "Free Throw 50", 1, {
-        step(Spot::Ft, A, 50, 0) } },
-    { 3, "Mikan Layups", 2, {
-        step(Spot::LayupL, A, 10, 0), step(Spot::LayupR, A, 10, 0) } },
-    { 4, "Mid-range Ladder", 5, {
-        step(Spot::LBaselineMid, M, 5, 15), step(Spot::LElbowMid, M, 5, 15), step(Spot::TopKeyMid, M, 5, 15),
-        step(Spot::RElbowMid, M, 5, 15), step(Spot::RBaselineMid, M, 5, 15) } },
-    { 5, "Game Shots", 4, {
-        step(Spot::Top3, A, 10, 30), step(Spot::RElbowMid, A, 10, 30), step(Spot::Ft, A, 10, 30),
-        step(Spot::LayupR, A, 10, 30) } },
-};
 
 } // namespace
 
