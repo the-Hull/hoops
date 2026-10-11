@@ -14,6 +14,11 @@ second entry (max 2 per person) — keep the scoring engine reusable.
   they stay on this build machine (one machine builds; the public repo `the-Hull/hoops` carries code, store
   text and screenshots only; the path was purged from history on 2026-10-11). `notes/` is git-ignored too
   (developer submission notes). The `.superpowers/` folder at the root is the subagent-review scratch.
+  `docs/store/video/` is git-ignored too: the explainer video (`hoops-explainer.mp4`, builder → USB → watch,
+  "Around the World 5") and its toolkit — a recorder simulator built from `docs/store/video/CMakeLists.txt`
+  with `Recorder.cpp` in place of `SelfTest.cpp` (nothing under `Software/` changes), a Playwright script for
+  the builder page, `make_video.py` (PIL + the ffmpeg from the `imageio-ffmpeg` wheel); `build.sh` runs it all,
+  its README has the details.
 - Feature spec: `docs/feature-spec.md`; design spec: `docs/.superpowers/specs/2026-10-10-hoops-mvp-design.md`;
   implementation plan (Tasks 1–15, all done): `docs/.superpowers/plans/2026-10-10-hoops-mvp.md`.
 - v2 (settings, full history, CSV export, streaks, store assets; branch `v2`): design spec
