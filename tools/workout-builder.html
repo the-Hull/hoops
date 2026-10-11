@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hoops Workout Builder</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0d0f12;
+    --panel: #171a1f;
+    --panel-2: #1f242b;
+    --line: #2c333c;
+    --text: #e8eaed;
+    --muted: #9aa4af;
+    --accent: #00aaaa;
+    --accent-ink: #001c1c;
+    --warn: #f0b429;
+    --error: #ff6b6b;
+    --ok: #4cc38a;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 6px; }
+  h1 span { color: var(--accent); }
+  h2 { font-size: 1.05rem; margin: 0 0 8px; }
+  p { margin: 0 0 6px; }
+  .lead { color: var(--muted); margin-bottom: 18px; }
+  code { font: 0.92em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel-2);
+         padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px;
+         margin-bottom: 16px; }
+  .install ol { margin: 0; padding-left: 1.3em; }
+  .install li { margin: 4px 0; }
+  .install .note { color: var(--muted); font-size: 0.92rem; margin-top: 8px; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; position: sticky; top: 0; z-index: 2;
+             background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .toolbar .spacer { flex: 1 1 auto; }
+  button, .filebtn {
+    font: inherit; font-size: 0.95rem; color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 12px; cursor: pointer; min-height: 36px; display: inline-flex;
+    align-items: center; gap: 6px;
+  }
+  button:hover:not(:disabled), .filebtn:hover { border-color: var(--accent); }
+  button:focus-visible, .filebtn:focus-within, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.icon { padding: 6px 9px; min-width: 36px; justify-content: center; }
+  button.danger:hover:not(:disabled) { border-color: var(--error); color: var(--error); }
+  .filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .filebtn { position: relative; }
+
+  #status { min-height: 1.45em; margin: 0 0 12px; }
+  #status.ok { color: var(--ok); }
+  #status.error { color: var(--error); }
+  #exportHint { color: var(--muted); font-size: 0.9rem; width: 100%; }
+  #exportHint.blocked { color: var(--error); }
+
+  .empty { text-align: center; color: var(--muted); padding: 36px 16px; border: 1px dashed var(--line);
+           border-radius: var(--radius); }
+
+  .workout { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+             padding: 12px 14px; margin-bottom: 14px; }
+  .workout.blocked { border-color: var(--error); }
+  .whead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .badge { font-size: 0.8rem; color: var(--muted); background: var(--panel-2); border-radius: 999px;
+           padding: 2px 9px; white-space: nowrap; }
+  .namefield { flex: 1 1 220px; display: flex; align-items: center; gap: 6px; }
+  .namefield input { flex: 1 1 auto; min-width: 0; font-size: 1.05rem; font-weight: 600; }
+  .counter { font-size: 0.8rem; color: var(--muted); min-width: 3.2em; text-align: right; }
+  .counter.over { color: var(--error); font-weight: 600; }
+  .wtools { display: flex; gap: 6px; }
+  .stats { color: var(--muted); font-size: 0.92rem; margin: 8px 0 6px; }
+  .stats b { color: var(--text); font-weight: 600; }
+
+  input, select {
+    font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+    padding: 6px 8px; min-height: 36px; width: 100%;
+  }
+  input.bad, select.bad { border-color: var(--error); }
+  label.f { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; color: var(--muted); min-width: 0; }
+
+  .steps { list-style: none; margin: 0; padding: 0; }
+  .step {
+    display: grid; gap: 6px 8px; align-items: end; padding: 8px 0; border-top: 1px solid var(--line);
+    grid-template-columns: 1.8rem minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas: "num spot goal value rest tools" ". chips chips chips chips chips";
+  }
+  .step .num { grid-area: num; color: var(--muted); font-weight: 600; padding-bottom: 8px; text-align: center; }
+  .step .spot { grid-area: spot; } .step .goal { grid-area: goal; } .step .value { grid-area: value; }
+  .step .rest { grid-area: rest; } .step .stools { grid-area: tools; display: flex; gap: 4px; }
+  .step .chips { grid-area: chips; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .chips .hint { font-size: 0.75rem; color: var(--muted); margin-right: 2px; }
+  .chips button { min-height: 28px; padding: 2px 9px; font-size: 0.82rem; border-radius: 999px; }
+  .chips button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .valuebox { display: flex; align-items: center; gap: 4px; }
+  .valuebox span { font-size: 0.8rem; color: var(--muted); }
+  .addstep { margin-top: 6px; }
+
+  .issues { list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.9rem; }
+  .issues li { padding: 2px 0 2px 1.4em; position: relative; }
+  .issues li::before { position: absolute; left: 0; }
+  .issues li.block { color: var(--error); }
+  .issues li.block::before { content: "\2716"; }
+  .issues li.warn { color: var(--warn); }
+  .issues li.warn::before { content: "\26A0"; }
+
+  footer { color: var(--muted); font-size: 0.85rem; margin-top: 28px; }
+
+  @media (max-width: 680px) {
+    main { padding-top: 16px; }
+    h1 { font-size: 1.35rem; }
+    .step {
+      grid-template-columns: 1.6rem minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas: "num spot spot" ". goal value" ". rest tools" ". chips chips";
+    }
+    .step .stools { justify-content: flex-end; align-self: end; }
+    .toolbar { position: static; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><span>Hoops</span> workout builder</h1>
+    <p class="lead">Build custom shooting workouts on your computer and copy them to the Hoops app on your UNA Watch.<br>
+      Up to 10 workouts of up to 8 steps each. Everything happens in this page; nothing is uploaded.</p>
+  </header>
+
+  <section class="box install" aria-labelledby="installTitle">
+    <h2 id="installTitle">How to install</h2>
+    <ol>
+      <li><b>Import your current <code>workouts.bin</code> first.</b> The file you download replaces the whole
+        custom workout list on the watch, so anything not in this page is lost. (The built-in workouts are not affected.)</li>
+      <li>Edit the workouts below, then press <b>Download workouts.bin</b>.</li>
+      <li><b>Watch:</b> make sure Hoops is not running, connect the watch over USB (it appears as a drive) and copy the
+        file to <code>Apps/Hoops/workouts.bin</code>, replacing the old one. Eject the drive, then open Hoops.</li>
+      <li><b>Simulator:</b> with the simulator closed, copy the file to <code>Software/Output/workouts.bin</code>.</li>
+    </ol>
+    <p class="note">Workouts are numbered in list order when you download, so moving or deleting one renumbers the
+      ones after it; past History entries show the name of the workout that now has their number.
+      <code>workouts.json</code> is a readable copy (the same format as the app's built-in preset list) that you can
+      import here again.</p>
+  </section>
+
+  <div class="toolbar">
+    <label class="filebtn" title="Open a workouts.bin from the watch (replaces this list) or a .json (adds to it)">
+      Import&hellip;
+      <input type="file" id="importFile" accept=".bin,.json,application/json,application/octet-stream">
+    </label>
+    <button type="button" id="addWorkout">+ Add workout</button>
+    <span class="spacer"></span>
+    <button type="button" class="primary" id="downloadBin">Download workouts.bin</button>
+    <button type="button" id="downloadJson">Download workouts.json</button>
+    <span id="exportHint" aria-live="polite"></span>
+  </div>
+
+  <p id="status" role="status" aria-live="polite"></p>
+  <div id="list"></div>
+
+  <footer>
+    Limits: 10 workouts, 8 steps per workout, names up to 19 characters (plain letters, digits and punctuation;
+    the watch font has no accents), values 1&ndash;999 (shots, or seconds for Time steps), rest 0&ndash;255 s.
+    A session stops counting at 400 shots. Time estimate: 12 s per shot plus rests and timed steps.
+  </footer>
+</main>
+
+<script>
+"use strict";
+// ==== codec begin (pure functions, no DOM: file layout, validation, statistics) ====
+
+/* Binary layout of workouts.bin, little-endian (the watch is an ARM Cortex-M).
+ * Mirrors the C++ PODs and their static_asserts; change both together:
+ *   Software/Libs/score/Serializer.hpp  struct Header {u32 magic, size, checksum}   static_assert(sizeof(Header) == 12)
+ *   Software/Libs/score/Workout.hpp     struct Step {u8 spot, rest_s; Goal{u8 type, pad; u16 value}}
+ *                                                                        static_assert(sizeof(Step) == 6)
+ *                                       struct Workout {u8 id; char name[20]; u8 stepCount; Step steps[8]}
+ *                                                                        static_assert(sizeof(Workout) == 1 + kNameLen + 1 + 6 * kMaxSteps)  // 70
+ *   Software/Libs/score/History.hpp     struct WorkoutStore {u8 count; u8 pad[3]; Workout items[10]}       // 704
+ * MAGIC is ser::kMagicWorkouts ('HWK1'). The C++ side bumps the magic whenever this layout changes:
+ * a magic bump MUST update this file (layout, MAGIC, and the reference test Tests/Host/score/Reference_test.cpp).
+ * Checksum: FNV-1a 32 over the 704-byte payload (offset basis 0x811C9DC5, prime 0x01000193). */
+const LAYOUT = Object.freeze({
+  MAGIC: 0x314B5748,            // 'HWK1' -> bytes 48 57 4B 31
+  HEADER_SIZE: 12,              // sizeof(ser::Header)
+  STEP_SIZE: 6,                 // sizeof(Step)
+  WORKOUT_SIZE: 70,             // sizeof(Workout)
+  STORE_SIZE: 704,              // sizeof(WorkoutStore)
+  FILE_SIZE: 716,               // HEADER_SIZE + STORE_SIZE
+  STORE_ITEMS_OFFSET: 4,        // offsetof(WorkoutStore, items)
+  NAME_OFFSET: 1,               // offsetof(Workout, name)
+  NAME_LEN: 20,                 // kNameLen (19 bytes + NUL)
+  STEP_COUNT_OFFSET: 21,        // offsetof(Workout, stepCount)
+  STEPS_OFFSET: 22,             // offsetof(Workout, steps)
+  MAX_STEPS: 8,                 // kMaxSteps
+  MAX_WORKOUTS: 10,             // kMaxUserWorkouts
+  FIRST_ID: 100,                // kFirstUserWorkoutId (user ids 100..109)
+});
+if (LAYOUT.WORKOUT_SIZE !== LAYOUT.STEPS_OFFSET + LAYOUT.STEP_SIZE * LAYOUT.MAX_STEPS ||
+    LAYOUT.STORE_SIZE !== LAYOUT.STORE_ITEMS_OFFSET + LAYOUT.WORKOUT_SIZE * LAYOUT.MAX_WORKOUTS ||
+    LAYOUT.FILE_SIZE !== LAYOUT.HEADER_SIZE + LAYOUT.STORE_SIZE) {
+  throw new Error("LAYOUT constants are inconsistent");
+}
+
+const LIMITS = Object.freeze({
+  NAME_BYTES: 19,               // kNameLen - 1
+  VALUE_MIN: 1, VALUE_MAX: 999, // goal value (shots, or seconds for Time)
+  REST_MAX: 255,                // u8 rest_s
+  MAX_SHOTS: 400,               // kMaxShots: a session stops counting there
+  RING_SEGMENTS: 50,            // Ring::kMaxSegments: larger Attempts goals are drawn as a progress ring
+  SECONDS_PER_SHOT: 12,         // Workout::estimateSeconds
+});
+
+// score::Spot order (index = enum value) with the display names of score/Spots.cpp.
+const SPOTS = Object.freeze([
+  { key: "LCorner3",     name: "3PT · L-Corner" },
+  { key: "LWing3",       name: "3PT · L-Wing" },
+  { key: "Top3",         name: "3PT · Top" },
+  { key: "RWing3",       name: "3PT · R-Wing" },
+  { key: "RCorner3",     name: "3PT · R-Corner" },
+  { key: "LBaselineMid", name: "Mid · L-Baseline" },
+  { key: "LElbowMid",    name: "Mid · L-Elbow" },
+  { key: "TopKeyMid",    name: "Mid · Top-Key" },
+  { key: "RElbowMid",    name: "Mid · R-Elbow" },
+  { key: "RBaselineMid", name: "Mid · R-Baseline" },
+  { key: "Ft",           name: "Free Throw" },
+  { key: "LayupL",       name: "Layup · L" },
+  { key: "LayupR",       name: "Layup · R" },
+]);
+// score::GoalType: Attempts 0, Makes 1, Time 2 (JSON keys as in tools/gen_presets.py).
+const GOALS = Object.freeze([
+  { key: "attempts", name: "Attempts" },
+  { key: "makes",    name: "Makes" },
+  { key: "time",     name: "Time" },
+]);
+const GOAL_TIME = 2;
+const OTHER_MAGICS = Object.freeze({
+  0x31535348: "a Hoops session file (sessions/<id>.bin or current.bin)",
+  0x32584948: "the Hoops session index (sessions/index.bin)",
+  0x31545348: "the Hoops settings file (settings.bin)",
+});
+
+const utf8 = new TextEncoder();
+
+function fnv1a(bytes) {
+  let h = 0x811C9DC5;
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= bytes[i];
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function nameBytes(name) { return utf8.encode(name).length; }
+function isAscii(name) { return /^[\x20-\x7e]*$/.test(name); }
+function validValue(v) { return Number.isInteger(v) && v >= LIMITS.VALUE_MIN && v <= LIMITS.VALUE_MAX; }
+function validRest(r) { return Number.isInteger(r) && r >= 0 && r <= LIMITS.REST_MAX; }
+function fourCC(u32) {
+  let s = "";
+  for (let i = 0; i < 4; i++) {
+    const c = (u32 >>> (8 * i)) & 0xff;
+    s += c >= 0x20 && c < 0x7f ? String.fromCharCode(c) : "?";
+  }
+  return s;
+}
+
+/** Shots of the Attempts/Makes steps (Workout::totalShots) and the estimate in seconds (Workout::estimateSeconds). */
+function workoutStats(w) {
+  let volume = 0, seconds = 0;
+  for (const s of w.steps) {
+    const v = Number.isInteger(s.value) ? s.value : 0;
+    if (s.goal === GOAL_TIME) seconds += v; else volume += v;
+    seconds += Number.isInteger(s.rest) ? s.rest : 0;
+  }
+  seconds += volume * LIMITS.SECONDS_PER_SHOT;
+  return { volume, seconds, minutes: Math.ceil(seconds / 60) };   // rounded up, as the watch's preview
+}
+
+/** Problems of one workout: blocking ones stop the export (the watch would reject the whole file). */
+function workoutIssues(w, index, all) {
+  const out = [];
+  const block = (text) => out.push({ text, blocking: true });
+  const warn = (text) => out.push({ text, blocking: false });
+  const name = w.name.trim();
+  if (name.length === 0) block("The name is empty.");
+  const nb = nameBytes(w.name);
+  if (nb > LIMITS.NAME_BYTES) block(`The name is ${nb} bytes long; the watch keeps at most ${LIMITS.NAME_BYTES}.`);
+  if (!isAscii(w.name)) warn("The name has characters outside plain letters, digits and punctuation; the watch font cannot draw them.");
+  if (name.length > 0 && all.some((o, j) => j !== index && o.name.trim() === name)) warn("Another workout has the same name.");
+  if (w.steps.length === 0) block("Add at least one step.");
+  if (w.steps.length > LAYOUT.MAX_STEPS) block(`${w.steps.length} steps; a workout holds at most ${LAYOUT.MAX_STEPS}. Delete ${w.steps.length - LAYOUT.MAX_STEPS}.`);
+  w.steps.forEach((s, j) => {
+    if (!validValue(s.value)) block(`Step ${j + 1}: the value must be a whole number from ${LIMITS.VALUE_MIN} to ${LIMITS.VALUE_MAX}.`);
+    if (!validRest(s.rest)) block(`Step ${j + 1}: the rest must be 0 to ${LIMITS.REST_MAX} s.`);
+    if (!(s.spot >= 0 && s.spot < SPOTS.length) || !(s.goal >= 0 && s.goal < GOALS.length)) block(`Step ${j + 1}: unknown spot or goal.`);
+    if (s.goal === 0 && validValue(s.value) && s.value > LIMITS.RING_SEGMENTS)
+      warn(`Step ${j + 1}: ${s.value} attempts is drawn as a progress ring, not per-shot segments (${LIMITS.RING_SEGMENTS} or fewer get segments).`);
+  });
+  const { volume } = workoutStats(w);
+  if (volume > LIMITS.MAX_SHOTS) warn(`${volume} shots in total: the session stops counting at ${LIMITS.MAX_SHOTS}.`);
+  return out;
+}
+
+/** Problems of the whole list: per-workout issues plus the workout count. */
+function storeIssues(workouts) {
+  const global = [];
+  if (workouts.length > LAYOUT.MAX_WORKOUTS)
+    global.push({ text: `${workouts.length} workouts; the watch holds at most ${LAYOUT.MAX_WORKOUTS}. Delete ${workouts.length - LAYOUT.MAX_WORKOUTS}.`, blocking: true });
+  const perWorkout = workouts.map((w, i) => workoutIssues(w, i, workouts));
+  const blocking = global.filter((x) => x.blocking).length +
+                   perWorkout.reduce((n, list) => n + list.filter((x) => x.blocking).length, 0);
+  return { global, perWorkout, blocking };
+}
+
+/** workouts.bin bytes (716) for the list; ids 100.. in list order, unused bytes zero. Throws on blocking issues. */
+function encodeStore(workouts) {
+  const issues = storeIssues(workouts);
+  if (issues.blocking > 0) throw new Error("The workouts have problems to fix first.");
+  const L = LAYOUT;
+  const buf = new Uint8Array(L.FILE_SIZE);
+  const dv = new DataView(buf.buffer);
+  const payload = L.HEADER_SIZE;
+  buf[payload] = workouts.length;                            // count; pad[3] stays 0
+  workouts.forEach((w, i) => {
+    const base = payload + L.STORE_ITEMS_OFFSET + i * L.WORKOUT_SIZE;
+    buf[base] = L.FIRST_ID + i;                              // id
+    buf.set(utf8.encode(w.name), base + L.NAME_OFFSET);      // <= 19 bytes, rest of name[20] stays NUL
+    buf[base + L.STEP_COUNT_OFFSET] = w.steps.length;
+    w.steps.forEach((s, j) => {
+      const at = base + L.STEPS_OFFSET + j * L.STEP_SIZE;
+      buf[at] = s.spot;
+      buf[at + 1] = s.rest;
+      buf[at + 2] = s.goal;                                  // at + 3: Goal::pad = 0
+      dv.setUint16(at + 4, s.value, true);
+    });
+  });
+  dv.setUint32(0, L.MAGIC, true);
+  dv.setUint32(4, L.STORE_SIZE, true);
+  dv.setUint32(8, fnv1a(buf.subarray(payload)), true);
+  return buf;
+}
+
+/** Parses workouts.bin; checks exactly what the watch checks on load (ser::decode + WorkoutStore::valid). */
+function decodeStore(bytes) {
+  const L = LAYOUT;
+  if (bytes.length < 4) throw new Error("This file is too short to be a Hoops workouts.bin.");
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const magic = dv.getUint32(0, true);
+  if (magic !== L.MAGIC) {
+    if (OTHER_MAGICS[magic]) throw new Error(`This is ${OTHER_MAGICS[magic]}, not workouts.bin.`);
+    if ((magic & 0x00ffffff) === (L.MAGIC & 0x00ffffff))
+      throw new Error(`This workouts file has format ${fourCC(magic)} (another Hoops version); this page reads ${fourCC(L.MAGIC)}. Use the builder that came with that version.`);
+    throw new Error("This is not a Hoops workouts.bin (it does not start with HWK1).");
+  }
+  if (bytes.length !== L.FILE_SIZE) throw new Error(`A workouts.bin is ${L.FILE_SIZE} bytes; this file is ${bytes.length}. It may be truncated.`);
+  const size = dv.getUint32(4, true);
+  if (size !== L.STORE_SIZE) throw new Error(`The header says ${size} bytes of data, expected ${L.STORE_SIZE}. The file is damaged.`);
+  const payload = bytes.subarray(L.HEADER_SIZE);
+  if (dv.getUint32(8, true) !== fnv1a(payload)) throw new Error("The checksum does not match: the file is damaged.");
+
+  const count = payload[0];
+  if (count > L.MAX_WORKOUTS) throw new Error(`The file says ${count} workouts; at most ${L.MAX_WORKOUTS} are allowed. The watch would not load it.`);
+  const dec = new TextDecoder("utf-8");
+  const workouts = [];
+  for (let i = 0; i < count; i++) {
+    const base = L.STORE_ITEMS_OFFSET + i * L.WORKOUT_SIZE;
+    const id = payload[base];
+    if (id < L.FIRST_ID || id >= L.FIRST_ID + L.MAX_WORKOUTS)
+      throw new Error(`Workout ${i + 1} has id ${id}, outside ${L.FIRST_ID}..${L.FIRST_ID + L.MAX_WORKOUTS - 1}. The watch would not load this file.`);
+    const raw = payload.subarray(base + L.NAME_OFFSET, base + L.NAME_OFFSET + L.NAME_LEN);
+    const nul = raw.indexOf(0);
+    const name = dec.decode(raw.subarray(0, nul < 0 ? L.NAME_LEN : nul));
+    const stepCount = payload[base + L.STEP_COUNT_OFFSET];
+    const label = `Workout ${i + 1} ("${name}")`;
+    if (stepCount < 1 || stepCount > L.MAX_STEPS)
+      throw new Error(`${label} has ${stepCount} steps; 1 to ${L.MAX_STEPS} are allowed. The watch would not load this file.`);
+    const steps = [];
+    for (let j = 0; j < stepCount; j++) {
+      const at = L.HEADER_SIZE + base + L.STEPS_OFFSET + j * L.STEP_SIZE;
+      const s = { spot: bytes[at], rest: bytes[at + 1], goal: bytes[at + 2], value: dv.getUint16(at + 4, true) };
+      if (s.spot >= SPOTS.length || s.goal >= GOALS.length || s.value === 0)
+        throw new Error(`${label}, step ${j + 1} is out of range (spot ${s.spot}, goal ${s.goal}, value ${s.value}). The watch would not load this file.`);
+      steps.push(s);
+    }
+    workouts.push({ id, name, steps });
+  }
+  return workouts;
+}
+
+/** The preset schema of tools/gen_presets.py: [{name, steps: [{spot, goal, value, rest}]}], no other keys. */
+function toJson(workouts) {
+  return JSON.stringify(workouts.map((w) => ({
+    name: w.name,
+    steps: w.steps.map((s) => ({ spot: SPOTS[s.spot].key, goal: GOALS[s.goal].key, value: s.value, rest: s.rest })),
+  })), null, 2) + "\n";
+}
+
+/** One workout object or an array of them, in the toJson() schema. Throws with the position of the first problem. */
+function parseJson(text) {
+  let data;
+  try { data = JSON.parse(text); } catch (e) { throw new Error(`This is not valid JSON (${e.message}).`); }
+  const list = Array.isArray(data) ? data : [data];
+  return list.map((w, i) => {
+    const where = Array.isArray(data) ? `Workout ${i + 1}` : "The workout";
+    if (!w || typeof w !== "object" || Array.isArray(w)) throw new Error(`${where} is not an object.`);
+    if (typeof w.name !== "string") throw new Error(`${where}: "name" must be text.`);
+    if (!Array.isArray(w.steps)) throw new Error(`${where}: "steps" must be a list.`);
+    const steps = w.steps.map((s, j) => {
+      const at = `${where} ("${w.name}"), step ${j + 1}`;
+      if (!s || typeof s !== "object") throw new Error(`${at} is not an object.`);
+      const spot = SPOTS.findIndex((x) => x.key === s.spot);
+      if (spot < 0) throw new Error(`${at}: unknown spot ${JSON.stringify(s.spot)} (known: ${SPOTS.map((x) => x.key).join(", ")}).`);
+      const goal = GOALS.findIndex((x) => x.key === s.goal);
+      if (goal < 0) throw new Error(`${at}: unknown goal ${JSON.stringify(s.goal)} (known: ${GOALS.map((x) => x.key).join(", ")}).`);
+      if (!Number.isInteger(s.value) || s.value < 0) throw new Error(`${at}: "value" must be a whole number.`);
+      if (!validRest(s.rest)) throw new Error(`${at}: "rest" must be a whole number from 0 to ${LIMITS.REST_MAX}.`);
+      return { spot, goal, value: s.value, rest: s.rest };
+    });
+    return { name: w.name, steps };
+  });
+}
+// ==== codec end ====
+</script>
+
+<script>
+"use strict";
+const SHOT_VALUES = [5, 10, 15, 20, 25, 30, 40, 50];
+const TIME_VALUES = [30, 60, 90, 120, 180];
+const REST_VALUES = [0, 15, 30, 60];
+
+let workouts = [];
+let dirty = false;
+
+const $ = (id) => document.getElementById(id);
+const listEl = $("list");
+
+function el(tag, props, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") e.className = v;
+    else if (k === "dataset") Object.assign(e.dataset, v);
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k in e) e[k] = v;
+    else e.setAttribute(k, v);
+  }
+  for (const c of children) if (c != null) e.append(c);
+  return e;
+}
+
+function setStatus(text, kind) {
+  const s = $("status");
+  s.textContent = text;
+  s.className = kind || "";
+}
+
+function changed(structural) {
+  dirty = true;
+  if (structural) render(); else refresh();
+}
+
+function newWorkoutName() {
+  for (let n = workouts.length + 1; ; n++) {
+    const name = `Custom ${n}`;
+    if (!workouts.some((w) => w.name.trim() === name)) return name;
+  }
+}
+
+function move(arr, i, d) {
+  const j = i + d;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+}
+
+function parseValue(text) { return /^\d+$/.test(text.trim()) ? parseInt(text, 10) : NaN; }
+
+// --- rendering ------------------------------------------------------------------------------------------------
+
+function render() {
+  const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
+  listEl.replaceChildren();
+  if (workouts.length === 0) {
+    listEl.append(el("div", { class: "empty" },
+      "No workouts yet. Import your current workouts.bin, or press ", el("b", {}, "+ Add workout"), "."));
+  }
+  workouts.forEach((w, i) => listEl.append(renderWorkout(w, i)));
+  refresh();
+  if (focusKey) {
+    const target = listEl.querySelector(`[data-key="${focusKey}"]`);
+    if (target) target.focus();
+  }
+}
+
+function renderWorkout(w, i) {
+  const card = el("section", { class: "workout", dataset: { index: i }, "aria-label": `Workout ${i + 1}` });
+  const nameInput = el("input", {
+    type: "text", value: w.name, maxLength: LIMITS.NAME_BYTES, spellcheck: false, autocomplete: "off",
+    "aria-label": `Name of workout ${i + 1}`, dataset: { key: `w${i}-name`, role: "name" },
+    oninput: (e) => { w.name = e.target.value; changed(false); },
+  });
+  card.append(el("div", { class: "whead" },
+    el("span", { class: "badge", dataset: { role: "badge" } }, ""),
+    el("div", { class: "namefield" }, nameInput, el("span", { class: "counter", dataset: { role: "counter" } })),
+    el("div", { class: "wtools" },
+      el("button", { type: "button", class: "icon", title: "Move up", "aria-label": "Move workout up", disabled: i === 0,
+                     dataset: { key: `w${i}-up` }, onclick: () => { move(workouts, i, -1); changed(true); } }, "↑"),
+      el("button", { type: "button", class: "icon", title: "Move down", "aria-label": "Move workout down",
+                     disabled: i === workouts.length - 1, dataset: { key: `w${i}-down` },
+                     onclick: () => { move(workouts, i, 1); changed(true); } }, "↓"),
+      el("button", { type: "button", class: "danger", title: "Delete this workout",
+                     onclick: () => {
+                       if (confirm(`Delete "${w.name || "(no name)"}"?`)) { workouts.splice(i, 1); changed(true); }
+                     } }, "Delete")),
+  ));
+  card.append(el("p", { class: "stats", dataset: { role: "stats" } }));
+
+  const steps = el("ol", { class: "steps" });
+  w.steps.forEach((s, j) => steps.append(renderStep(w, i, s, j)));
+  card.append(steps);
+  card.append(el("button", {
+    type: "button", class: "addstep", disabled: w.steps.length >= LAYOUT.MAX_STEPS, dataset: { key: `w${i}-addstep` },
+    onclick: () => {
+      const last = w.steps[w.steps.length - 1];
+      w.steps.push(last ? { ...last } : { spot: 2, goal: 0, value: 10, rest: 30 });
+      changed(true);
+    },
+  }, w.steps.length >= LAYOUT.MAX_STEPS ? `8 steps (the maximum)` : "+ Add step"));
+  card.append(el("ul", { class: "issues", dataset: { role: "issues" } }));
+  return card;
+}
+
+function renderStep(w, i, s, j) {
+  const k = `w${i}s${j}`;
+  const spot = el("select", { "aria-label": `Step ${j + 1} spot`, dataset: { key: `${k}-spot` },
+                              onchange: (e) => { s.spot = +e.target.value; changed(false); } },
+    ...SPOTS.map((sp, idx) => el("option", { value: idx, selected: idx === s.spot }, sp.name)));
+  const goal = el("select", { "aria-label": `Step ${j + 1} goal`, dataset: { key: `${k}-goal` },
+                              onchange: (e) => { s.goal = +e.target.value; changed(true); } },
+    ...GOALS.map((g, idx) => el("option", { value: idx, selected: idx === s.goal }, g.name)));
+  const value = el("input", {
+    type: "number", min: LIMITS.VALUE_MIN, max: LIMITS.VALUE_MAX, step: 1, inputMode: "numeric",
+    value: Number.isInteger(s.value) ? String(s.value) : "", "aria-label": `Step ${j + 1} value`,
+    dataset: { key: `${k}-value`, role: "value" },
+    oninput: (e) => { s.value = parseValue(e.target.value); changed(false); },
+  });
+  const rests = REST_VALUES.includes(s.rest) ? REST_VALUES : [...REST_VALUES, s.rest].sort((a, b) => a - b);
+  const rest = el("select", { "aria-label": `Step ${j + 1} rest after the step`, dataset: { key: `${k}-rest` },
+                              onchange: (e) => { s.rest = +e.target.value; changed(false); } },
+    ...rests.map((r) => el("option", { value: r, selected: r === s.rest }, r === 0 ? "No rest" : `${r} s`)));
+
+  spot.value = String(s.spot);
+  goal.value = String(s.goal);
+  rest.value = String(s.rest);
+
+  const isTime = s.goal === GOAL_TIME;
+  const unit = isTime ? "Seconds" : s.goal === 1 ? "Makes" : "Shots";
+  const chips = el("div", { class: "chips" }, el("span", { class: "hint" }, `${unit}:`),
+    ...(isTime ? TIME_VALUES : SHOT_VALUES).map((v) => el("button", {
+      type: "button", class: v === s.value ? "on" : "", "aria-pressed": String(v === s.value),
+      dataset: { key: `${k}-chip${v}`, chip: v },
+      onclick: () => { s.value = v; value.value = String(v); changed(false); },
+    }, isTime && v >= 60 ? `${v / 60 | 0}:${String(v % 60).padStart(2, "0")}` : String(v))));
+
+  return el("li", { class: "step", dataset: { step: j } },
+    el("span", { class: "num" }, String(j + 1)),
+    el("label", { class: "f spot" }, "Spot", spot),
+    el("label", { class: "f goal" }, "Goal", goal),
+    el("label", { class: "f value" }, unit, value),
+    el("label", { class: "f rest" }, "Rest after", rest),
+    el("div", { class: "stools" },
+      el("button", { type: "button", class: "icon", title: "Move step up", "aria-label": `Move step ${j + 1} up`,
+                     disabled: j === 0, dataset: { key: `${k}-up` },
+                     onclick: () => { move(w.steps, j, -1); changed(true); } }, "↑"),
+      el("button", { type: "button", class: "icon", title: "Move step down", "aria-label": `Move step ${j + 1} down`,
+                     disabled: j === w.steps.length - 1, dataset: { key: `${k}-down` },
+                     onclick: () => { move(w.steps, j, 1); changed(true); } }, "↓"),
+      el("button", { type: "button", class: "icon danger", title: "Delete step", "aria-label": `Delete step ${j + 1}`,
+                     onclick: () => { w.steps.splice(j, 1); changed(true); } }, "✕")),
+    chips);
+}
+
+/** Updates everything derived (counters, stats, issues, export buttons) without rebuilding the inputs. */
+function refresh() {
+  const issues = storeIssues(workouts);
+  listEl.querySelectorAll("section.workout").forEach((card) => {
+    const i = +card.dataset.index;
+    const w = workouts[i];
+    const list = issues.perWorkout[i];
+    const nb = nameBytes(w.name);
+    const counter = card.querySelector('[data-role="counter"]');
+    counter.textContent = `${nb}/${LIMITS.NAME_BYTES}`;
+    counter.classList.toggle("over", nb > LIMITS.NAME_BYTES);
+    card.querySelector('[data-role="badge"]').textContent =
+      i < LAYOUT.MAX_WORKOUTS ? `#${i + 1}` : `#${i + 1} (over the limit)`;
+    card.querySelector('[data-role="name"]').classList.toggle("bad", w.name.trim() === "" || nb > LIMITS.NAME_BYTES);
+
+    const st = workoutStats(w);
+    const stats = card.querySelector('[data-role="stats"]');
+    stats.replaceChildren(
+      el("b", {}, `${st.volume} shots`), " · about ", el("b", {}, `${st.minutes} min`),
+      ` · ${w.steps.length} step${w.steps.length === 1 ? "" : "s"}`);
+
+    card.querySelectorAll("li.step").forEach((row) => {
+      const s = w.steps[+row.dataset.step];
+      row.querySelector('[data-role="value"]').classList.toggle("bad", !validValue(s.value));
+      row.querySelectorAll("[data-chip]").forEach((b) => {
+        const on = +b.dataset.chip === s.value;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-pressed", String(on));
+      });
+    });
+
+    const ul = card.querySelector('[data-role="issues"]');
+    ul.replaceChildren(...list.map((x) => el("li", { class: x.blocking ? "block" : "warn" }, x.text)));
+    card.classList.toggle("blocked", list.some((x) => x.blocking));
+  });
+
+  const blocked = issues.blocking > 0;
+  $("downloadBin").disabled = blocked;
+  $("downloadJson").disabled = blocked;
+  $("addWorkout").disabled = workouts.length >= LAYOUT.MAX_WORKOUTS;
+  const hint = $("exportHint");
+  hint.className = blocked ? "blocked" : "";
+  if (issues.global.length) hint.textContent = issues.global.map((x) => x.text).join(" ");
+  else if (blocked) hint.textContent = `Fix the ${issues.blocking === 1 ? "problem" : `${issues.blocking} problems`} marked ✖ to enable the download.`;
+  else hint.textContent = `${workouts.length} of ${LAYOUT.MAX_WORKOUTS} workouts` +
+    (workouts.length === 0 ? " — downloading now gives an empty custom list." : ".");
+}
+
+// --- import / export ------------------------------------------------------------------------------------------
+
+function download(bytes, filename, type) {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const a = el("a", { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+$("downloadBin").addEventListener("click", () => {
+  try {
+    download(encodeStore(workouts), "workouts.bin", "application/octet-stream");
+    dirty = false;
+    setStatus(`Downloaded workouts.bin with ${workouts.length} workout${workouts.length === 1 ? "" : "s"}. ` +
+              "Copy it to Apps/Hoops/workouts.bin on the watch (see How to install).", "ok");
+  } catch (e) { setStatus(e.message, "error"); }
+});
+
+$("downloadJson").addEventListener("click", () => {
+  if (storeIssues(workouts).blocking > 0) return;
+  download(toJson(workouts), "workouts.json", "application/json");
+  setStatus("Downloaded workouts.json. The watch reads workouts.bin; keep the JSON as a readable copy.", "ok");
+});
+
+$("addWorkout").addEventListener("click", () => {
+  if (workouts.length >= LAYOUT.MAX_WORKOUTS) return;
+  workouts.push({ name: newWorkoutName(), steps: [{ spot: 2, goal: 0, value: 10, rest: 30 }] });
+  changed(true);
+  const cards = listEl.querySelectorAll("section.workout");
+  const input = cards[cards.length - 1].querySelector('[data-role="name"]');
+  input.focus();
+  input.select();
+});
+
+$("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";          // the same file can be picked again
+  if (!file) return;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const isJson = /\.json$/i.test(file.name) || (bytes.length > 0 && (bytes[0] === 0x5b || bytes[0] === 0x7b));
+    if (isJson) {
+      const incoming = parseJson(new TextDecoder("utf-8").decode(bytes));
+      const room = Math.max(0, LAYOUT.MAX_WORKOUTS - workouts.length);
+      const taken = incoming.slice(0, room);
+      workouts.push(...taken);
+      changed(true);
+      const skipped = incoming.length - taken.length;
+      setStatus(`Added ${taken.length} workout${taken.length === 1 ? "" : "s"} from ${file.name}` +
+                (skipped ? `; ${skipped} not added because the watch holds ${LAYOUT.MAX_WORKOUTS}.` : "."),
+                skipped ? "error" : "ok");
+    } else {
+      const loaded = decodeStore(bytes);
+      if (workouts.length && dirty && !confirm(`Replace the ${workouts.length} workouts in this page with ${file.name}?`)) return;
+      workouts = loaded.map((w) => ({ name: w.name, steps: w.steps }));
+      render();
+      dirty = false;
+      setStatus(`Loaded ${loaded.length} workout${loaded.length === 1 ? "" : "s"} from ${file.name}.`, "ok");
+    }
+  } catch (err) {
+    setStatus(`Could not import ${file.name}: ${err.message}`, "error");
+  }
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (dirty && workouts.length) { e.preventDefault(); e.returnValue = ""; }
+});
+
+render();
+</script>
+</body>
+</html>
