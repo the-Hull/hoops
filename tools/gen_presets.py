@@ -43,7 +43,7 @@ SPOTS = (
 )
 GOALS = {"attempts": "Attempts", "makes": "Makes", "time": "Time"}
 
-MAX_PRESETS = 255     # ids are uint8_t, user workouts start at 100 (kFirstUserWorkoutId)
+MAX_PRESETS = 99      # preset ids are 1..N; user workouts start at 100 (kFirstUserWorkoutId)
 MAX_NAME_BYTES = 19   # kNameLen 20 incl. NUL
 MAX_STEPS = 8         # kMaxSteps
 MAX_VALUE = 999
