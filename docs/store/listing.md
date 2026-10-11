@@ -30,10 +30,19 @@ your heart rate, and the ring shows your percentage as you go, coloured green fr
 below. Change spot at any time by holding the bottom left button, or
 set an open-session target (25 to 200 shots) and watch the ring fill up towards it.
 
-**Workouts.** Five presets are built in: Around the World, Free Throw 50, Mikan Layups, Mid-range Ladder and
-Game Shots. Each step has a spot and a goal (a number of shots, a number of makes, or a time) followed by a rest
-countdown you can extend or skip. Build your own workouts right on the watch, up to eight steps each, and keep
-up to ten of them.
+**Workouts.** Fifteen built-in workouts from 50 to 200 shots — five drills in S/M/L sizes (Around the World,
+Free Throw, Mikan Layups, Mid-range Ladder, Game Shots) plus warm-up, free-throw sets, corners, elbows and a
+200-shot session. Each step has a spot and a goal (a number of shots, a number of makes, or a time) followed by
+a rest countdown you can extend or skip. Build your own workouts right on the watch, up to eight steps each, and
+keep up to ten of them.
+
+**Plan workouts on your computer.** The Hoops workout builder is a single web page that works offline and
+reads and writes the watch's custom workout file:
+1. Connect the watch over USB and import `Apps/Hoops/workouts.bin` into the builder (skip this if you have no
+   custom workouts yet; the file you download replaces the whole custom list).
+2. Add or edit workouts — spot, goal and rest for up to eight steps — and press Download workouts.bin.
+3. With Hoops closed, copy the file back to `Apps/Hoops/workouts.bin`, eject the watch and open Hoops.
+<!-- Builder: tools/workout-builder.html in the source; link the hosted page here once it is published. -->
 
 **Mistakes happen.** Pressed the wrong button? The top left button undoes the last shot. The bottom left
 button pauses; from the pause menu you resume, end and save, or discard. If the watch restarts mid-session,
@@ -57,7 +66,10 @@ reads better in bright sunshine), light or strong haptics or none, and whether h
 - One-press scoring: right top = make, right bottom = miss, with distinct buzzes
 - 13 court spots across three-point, mid-range, free throw and layups
 - Open sessions with a live percentage ring and an optional shot target (25 / 50 / 100 / 200)
-- Five preset workouts and up to ten custom workouts built on the watch (up to eight steps each)
+- Fifteen built-in workouts from 50 to 200 shots — five drills in S/M/L sizes plus warm-up, free-throw sets,
+  corners, elbows and a 200-shot session
+- Up to ten custom workouts (up to eight steps each), built on the watch or in the offline workout builder on
+  your computer
 - Goals by attempts, makes or time, with a rest countdown (+15 s or skip)
 - Undo, pause, resume after a restart
 - Results: court map, categories, highlights, five-session trend
@@ -86,9 +98,14 @@ In the pause menu, BACK resumes. Holding DOWN can be set to pause instead of cha
 
 ## What's new
 
-**Version 1.0** — first release: open sessions at 13 spots, five preset workouts, custom workouts, undo and
-pause, results with court map, categories, highlights and trend, 50-session history, per-spot records, streak
-haptics, CSV export, settings, dark and light colour schemes.
+**Version 0.1.0** — fifteen built-in workouts from 50 to 200 shots (the five drills in S/M/L sizes plus
+Warm-up 50, FT Sets 5x10, Elbows & Key, Corner 3s and Pro Session 200); the workout builder, a web page for
+making custom workouts on your computer and copying them to the watch over USB; a tidier workout preview for
+five-step workouts.
+
+**Version 0.0.1** — first build: open sessions at 13 spots, five preset workouts, custom workouts, undo and pause,
+results with court map, categories, highlights and trend, 50-session history, per-spot records, streak haptics,
+CSV export, settings, dark and light colour schemes.
 
 ## Category and tags
 
@@ -104,7 +121,7 @@ Screenshots from the watch display (240 × 240, shown at 2×), in `previews/`:
 | `home.png` | Home menu with the last session's result |
 | `spot-picker.png` | Choosing one of the 13 spots, with last and best percentage |
 | `active-open.png` | An open session: makes / attempts, percentage, last shots, time, heart rate |
-| `active-workout.png` | A workout step in progress: step 1 of 4, shots left |
+| `active-workout.png` | A workout step in progress: step 1 of 5, shots left |
 | `rest.png` | Rest countdown between workout steps |
 | `pause.png` | Pause menu: resume, end and save, discard |
 | `results-court.png` | Results page 1: court map, percentage per spot |
@@ -112,8 +129,8 @@ Screenshots from the watch display (240 × 240, shown at 2×), in `previews/`:
 | `results-highlights.png` | Results page 3: streak, best spot, work on, time, heart rate |
 | `results-trend.png` | Results page 4: trend over the last five sessions |
 | `history.png` | History list of saved sessions |
-| `workouts.png` | Preset and custom workouts |
-| `workout-preview.png` | A workout's steps before starting |
+| `workouts.png` | The workout list: built-in workouts, then your own |
+| `workout-preview.png` | A workout's steps before starting (Game Shots S, five steps) |
 | `step-builder.png` | Building a custom workout step on the watch |
 | `settings.png` | Settings: goals, target, haptics, scheme, CSV export and more |
 | `home-light.png` | Home in the light colour scheme |
@@ -138,8 +155,9 @@ test package) and when the two differ.
 1. apps.unawatch.com → Add New → name "Hoops" + short description → copy the App ID.
 2. Put the App ID in both places: `APP_ID` in `Software/Apps/Hoops-CMake/CMakeLists.txt` and `"id"` in
    `store/app-manifest.json`. Commit.
-3. Tag the release (`git tag v1.0.0`) so the build version (and the `.uapp` name and `appVersion`) is clean;
-   the version comes from git tags, and a dirty tree adds a suffix.
+3. Tag the release (`git tag -a apps-v0.1.0`; the SDK reads only `apps-vX.Y.Z` tags, `apps-v0.0.1` is on
+   73f0e22) so the build version (and the `.uapp` name and `appVersion`) is clean; commits after the tag add
+   `-<n>-<hash>`, a dirty tree `-dirty`.
 4. `export UNA_SDK=$HOME/una-sdk && tools/package_store.sh` → `dist/Hoops-<ver>.zip` (builds the watch app,
    fills `binary`/`appVersion`, stamps and checks `minKernelVersion`).
 5. On the app page: Version → Upload New → upload the zip; paste the listing text above (description,

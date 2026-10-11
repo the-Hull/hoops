@@ -67,7 +67,7 @@ Optional later: Floater, Post, Deep 3.
 - Workout = ordered list of **steps**: `spot` + `goal` + optional `rest`.
 - Goal types: **attempts** ("10 shots"), **makes** ("make 5"), **time** ("60 s").
 - Step done → long buzz + rest / next-step screen.
-- Presets: *Around the World* (5 × 3PT spots × 10), *Free Throw 50*, *Mikan Layups* (L ×10, R ×10), *Mid-range Ladder* (5 mid spots × make 5), *Game Shots* (3PT, Mid, FT, Layup × 10).
+- Presets: 15 presets generated from `Software/Libs/score/presets.json` (see CLAUDE.md).
 - Custom workouts: on-watch builder (spot → goal type → value 5/10/15/20/25/50 → rest 0/15/30/60 s → repeat; up to 8 slots). Stretch: JSON workouts via BLE file transfer.
 
 ### 3.3 Input methods (layered)
