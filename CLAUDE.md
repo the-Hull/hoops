@@ -80,7 +80,7 @@ Two processes, as every UNA app:
   - `sessions/<id>.csv` (plain text, no header block; only with the CSV export setting on): written on End &
     save after the session file and the in-memory index row, before `index.bin` (a crash between leaves at worst
     an orphan CSV). Header `session_id,date,workout,shot,spot,category,made,t_s`, one row per shot, e.g.
-    `1791651056,2026-10-10,Game Shots,1,3PT · Top,3PT,1,12` (`workout` = preset/user name or `Open`, a `,` in
+    `1791651056,2026-10-10,Game Shots S,1,3PT · Top,3PT,1,12` (`workout` = preset/user name or `Open`, a `,` in
     it becomes a space; `spot` keeps the UTF-8 middle dot; `t_s` = seconds since the session start). Lines are
     buffered in `Storage::mBuf` (≈ 10 writes for 400 shots); a failed write logs a WARNING and removes the torn
     file, the session is still indexed. Removed with its session (eviction, Clear history). On the watch:
@@ -347,11 +347,14 @@ full-store phase 3 8/8 (Dark and Light); GUI data+bss 162 012 B, service 20 032 
 Tagged `apps-v0.0.1` on `main` 73f0e22 (MVP + v2), the first versioned build.
 
 0.1.0 (2026-10-11, branch `release-0.1.0`, Tasks 1–4): 15 preset workouts (50–200 shots, the five drills in
-S/M/L sizes + Warm-up 50, FT Sets 5x10, Elbows & Key, Corner 3s, Pro Session 200) generated from
-`Software/Libs/score/presets.json` by `tools/gen_presets.py` (`--check`, cap 99); five-row Workout Preview
-layout (rows from y 68, 19 px pitch, counts end at x 196, clear of the SELECT badge); browser workout builder
-`tools/workout-builder.html` (imports/exports `workouts.bin` and JSON, format locked by
-`Reference_test.cpp`); self-test follows the presets, six store previews refreshed. No engine, IPC, screen-set
+S/L sizes (Game Shots has S and M) + Warm-up 50, FT Sets 5x10, Elbows & Key, Corner 3s, Pro Session 200)
+generated from `Software/Libs/score/presets.json` by `tools/gen_presets.py` (`--check`, cap 99); five-row Workout Preview
+layout (rows from y 68, 19 px pitch, counts end at x 196, clear of the SELECT badge; the name header uses
+`Theme::headerFit` to stay in x 42..198: letter space 2 → 0 → -1, then dots); a preset's copy is "<name> 2" with
+the name cut to 17 and trailing spaces dropped ("Around the World S" and "… L" both give "Around the World 2");
+browser workout builder `tools/workout-builder.html` (imports/exports `workouts.bin` and JSON, format locked by
+`Reference_test.cpp`: expected header + workout 0 bytes and the payload's FNV-1a); generator names printable
+ASCII only; self-test follows the presets, six store previews refreshed. No engine, IPC, screen-set
 or file-format change. Verified (2026-10-11): 92 host tests, `gen_presets.py --check` clean; self-test 120/120,
 crash-resume 9/9, full-store phase 3 8/8 (Dark and Light); LVGL pool peak 23 640 B; GUI data+bss 162 020 B,
 service 20 036 B; `Hoops_0.0.1-7-92714bf.uapp` 310 216 B; builder import → download of

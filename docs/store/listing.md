@@ -30,9 +30,9 @@ your heart rate, and the ring shows your percentage as you go, coloured green fr
 below. Change spot at any time by holding the bottom left button, or
 set an open-session target (25 to 200 shots) and watch the ring fill up towards it.
 
-**Workouts.** Fifteen built-in workouts from 50 to 200 shots — five drills in S/M/L sizes (Around the World,
-Free Throw, Mikan Layups, Mid-range Ladder, Game Shots) plus warm-up, free-throw sets, corners, elbows and a
-200-shot session. Each step has a spot and a goal (a number of shots, a number of makes, or a time) followed by
+**Workouts.** Fifteen built-in workouts from 50 to 200 shots — five drills in small and large sizes (Around
+the World, Free Throw, Mikan Layups, Mid-range Ladder; Game Shots in small and medium) plus warm-up,
+free-throw sets, corners, elbows and a 200-shot session. Each step has a spot and a goal (a number of shots, a number of makes, or a time) followed by
 a rest countdown you can extend or skip. Build your own workouts right on the watch, up to eight steps each, and
 keep up to ten of them.
 
@@ -66,7 +66,7 @@ reads better in bright sunshine), light or strong haptics or none, and whether h
 - One-press scoring: right top = make, right bottom = miss, with distinct buzzes
 - 13 court spots across three-point, mid-range, free throw and layups
 - Open sessions with a live percentage ring and an optional shot target (25 / 50 / 100 / 200)
-- Fifteen built-in workouts from 50 to 200 shots — five drills in S/M/L sizes plus warm-up, free-throw sets,
+- Fifteen built-in workouts from 50 to 200 shots — five drills in small and large sizes plus warm-up, free-throw sets,
   corners, elbows and a 200-shot session
 - Up to ten custom workouts (up to eight steps each), built on the watch or in the offline workout builder on
   your computer
@@ -98,14 +98,12 @@ In the pause menu, BACK resumes. Holding DOWN can be set to pause instead of cha
 
 ## What's new
 
-**Version 0.1.0** — fifteen built-in workouts from 50 to 200 shots (the five drills in S/M/L sizes plus
-Warm-up 50, FT Sets 5x10, Elbows & Key, Corner 3s and Pro Session 200); the workout builder, a web page for
-making custom workouts on your computer and copying them to the watch over USB; a tidier workout preview for
-five-step workouts.
-
-**Version 0.0.1** — first build: open sessions at 13 spots, five preset workouts, custom workouts, undo and pause,
-results with court map, categories, highlights and trend, 50-session history, per-spot records, streak haptics,
-CSV export, settings, dark and light colour schemes.
+**Version 0.1.0** — first release: open sessions at 13 spots; fifteen built-in workouts from 50 to 200 shots
+(five drills in small and large sizes — Game Shots in small and medium — plus Warm-up 50, FT Sets 5x10, Elbows &
+Key, Corner 3s and Pro Session 200); custom workouts built on the watch or in the workout builder, a web page
+for making them on your computer and copying them to the watch over USB; undo and pause; results with court
+map, categories, highlights and trend; 50-session history, per-spot records, streak haptics, CSV export,
+settings, dark and light colour schemes.
 
 ## Category and tags
 
