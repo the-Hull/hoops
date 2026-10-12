@@ -183,8 +183,8 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
 
 ```bash
 .venv/bin/python3 tools/make_icons.py      # Resources/icon_60x60.png, icon_30x30.png, store/icon.png (deterministic)
-tools/package_store.sh --allow-placeholder # test package with the placeholder App ID
-tools/package_store.sh                     # refuses while APP_ID is the placeholder 13F039C6FE024E86
+tools/package_store.sh                     # App ID AB39D5AB82ABA01D (real, set 2026-10-12) in CMakeLists.txt and the manifest;
+                                           # --allow-placeholder only matters while APP_ID is the 13F0… placeholder
 # -> dist/Hoops-<ver>.zip = Hoops_<ver>.uapp + icon.png + app-manifest.json + previews/*.png (dist/ is git-ignored)
 ```
 
@@ -419,8 +419,8 @@ Next:
    `make_msg` failures in the service log (should be none), Light scheme on the
    MIP display.
 2. Originality feature (e.g. Pressure FT / ghost pace against a previous session).
-3. Real App ID from apps.unawatch.com (`13F039C6FE024E86` is a local placeholder) in **both**
-   `APP_ID` (`Software/Apps/Hoops-CMake/CMakeLists.txt`) and `"id"` in `store/app-manifest.json`.
+3. ~~Real App ID~~ done 2026-10-12: `AB39D5AB82ABA01D` in `APP_ID` (`Software/Apps/Hoops-CMake/CMakeLists.txt`),
+   `"id"` in `store/app-manifest.json` and the two simulator CMake files.
 4. Tag `apps-vX.Y.Z` (0.1.0 after this merge), `tools/package_store.sh`, upload, release and submit via
    the form by **30 Oct 2026, 16:00 UK**.
 5. Later: FIT export, IMU "smart attempts", table-tennis entry on the same engine.
