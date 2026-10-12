@@ -185,7 +185,10 @@ lines. Accelerometer/gyro are NOT simulated. Sensor sim config: `simulator/Confi
 .venv/bin/python3 tools/make_icons.py      # Resources/icon_60x60.png, icon_30x30.png, store/icon.png (deterministic)
 tools/package_store.sh                     # App ID AB39D5AB82ABA01D (real, set 2026-10-12) in CMakeLists.txt and the manifest;
                                            # --allow-placeholder only matters while APP_ID is the 13F0… placeholder
-# -> dist/Hoops-<ver>.zip = Hoops_<ver>.uapp + icon.png + app-manifest.json + previews/*.png (dist/ is git-ignored)
+# -> dist/Hoops-<ver>.zip = Hoops_<ver>.uapp + icon.png + app-manifest.json, nothing else (dist/ is git-ignored).
+#    The store validates the manifest against a strict schema: "description" is required and any key outside
+#    the documented set is rejected (it refused "previews" on 2026-10-12); the script checks both. The 16
+#    screenshots in docs/store/previews are uploaded in the store's web form, not in the zip.
 ```
 
 **Workout builder** (`tools/workout-builder.html`, one self-contained page, no network): open it from disk in a
@@ -386,6 +389,10 @@ the active step's spot in teal with a ring, used spots numbered; clicking a dot 
 (2026-10-11): 92 host tests; self-test 122/122, crash-resume 9/9, full-store phase 3 12/12 (Dark and Light);
 LVGL pool peak 23 640 B; GUI data+bss 162 044 B, service 20 036 B; builder byte identity re-checked under Node.
 `apps-v0.2.0` is tagged on `main` after the merge.
+
+0.2.1 (2026-10-12): the store release. Real App ID `AB39D5AB82ABA01D`; `store/app-manifest.json` with the required
+`description` and only the SDK-documented keys (the store's schema refused `previews`); the zip is `.uapp` + `icon.png`
++ `app-manifest.json`, screenshots go in the store form. Same code as 0.2.0. Tagged `apps-v0.2.1`, pushed with `main`.
 
 Known limitations / next:
 - A Light-scheme user sees one dark frame at GUI start (the GUI starts Dark until SETTINGS arrives, ~100 ms).

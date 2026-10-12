@@ -102,7 +102,7 @@ In the pause menu, BACK resumes. Holding DOWN can be set to pause instead of cha
 
 ## What's new
 
-**Version 0.2.0** — first release: open sessions at 13 spots; fifteen built-in workouts from 50 to 200 shots
+**Version 0.2.1** — first release: open sessions at 13 spots; fifteen built-in workouts from 50 to 200 shots
 (five drills in small and large sizes — Game Shots in small and medium — plus Warm-up 50, FT Sets 5x10, Elbows &
 Key, Corner 3s and Pro Session 200); custom workouts built on the watch or in the workout builder, a web page
 for making them on your computer — with a half-court map of each step — and copying them to the watch over
@@ -117,7 +117,8 @@ light colour schemes.
 
 ## Previews
 
-Screenshots from the watch display (240 × 240, shown at 2×), in `previews/`:
+Screenshots from the watch display (240 × 240, shown at 2×), in `previews/`, uploaded in the store's form (the
+package zip carries only the binary, the icon and the manifest):
 
 | File | Shows |
 |---|---|
